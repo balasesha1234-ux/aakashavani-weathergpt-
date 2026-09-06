@@ -258,26 +258,16 @@ class CurrentWeatherTool(BaseTool):
 
     async def execute(self, **kwargs) -> ToolResult:
         t0 = time.time()
-        lat = kwargs.get("latitude", 20.7453)
-        lon = kwargs.get("longitude", 78.6022)
+        lat = kwargs.get("latitude") or kwargs.get("lat") or 20.7453
+        lon = kwargs.get("longitude") or kwargs.get("lon") or 78.6022
 
         try:
             full_data = await WeatherService.get_live_weather(lat, lon)
-            curr = full_data.get("current", {})
             elapsed = int((time.time() - t0) * 1000)
-            compact_obs = {
-                "temperature": curr.get("temperature"),
-                "feels_like": curr.get("feels_like"),
-                "humidity": curr.get("humidity"),
-                "rainfall_mm": curr.get("rainfall_mm", 0.0),
-                "wind_speed_kmh": curr.get("wind_speed_kmh"),
-                "condition": curr.get("condition"),
-                "weather_code": curr.get("weather_code")
-            }
             return ToolResult(
                 tool_name=self.name,
                 success=True,
-                data=compact_obs,
+                data=full_data,
                 latency_ms=elapsed,
                 provenance="Open-Meteo Physical NWP Surface Model"
             )
@@ -306,41 +296,16 @@ class ForecastTool(BaseTool):
 
     async def execute(self, **kwargs) -> ToolResult:
         t0 = time.time()
-        lat = kwargs.get("latitude", 20.7453)
-        lon = kwargs.get("longitude", 78.6022)
+        lat = kwargs.get("latitude") or kwargs.get("lat") or 20.7453
+        lon = kwargs.get("longitude") or kwargs.get("lon") or 78.6022
 
         try:
             full_data = await WeatherService.get_live_weather(lat, lon)
-            meteogram = full_data.get("hourly_meteogram", [])[:12]  # Next 12 hours
-            forecast_7d = full_data.get("forecast_7d", [])[:5]     # Next 5 days
-            
-            # Extract key summary
-            tomorrow = forecast_7d[1] if len(forecast_7d) > 1 else (forecast_7d[0] if forecast_7d else {})
-            high_rain_hours = [h for h in meteogram if h.get("rain_prob", 0) >= 50 or h.get("rain_mm", 0) >= 1.0]
-
             elapsed = int((time.time() - t0) * 1000)
-            compact_forecast = {
-                "tomorrow_summary": {
-                    "date": tomorrow.get("date"),
-                    "condition": tomorrow.get("condition"),
-                    "temp_max": tomorrow.get("temp_max"),
-                    "temp_min": tomorrow.get("temp_min"),
-                    "rain_prob_max": tomorrow.get("rain_prob_max"),
-                    "rain_sum_mm": tomorrow.get("rain_sum_mm")
-                },
-                "high_rain_windows_next_12h": [
-                    {"time": h.get("time"), "rain_prob": h.get("rain_prob"), "rain_mm": h.get("rain_mm")}
-                    for h in high_rain_hours
-                ],
-                "next_5_days": [
-                    {"date": d.get("date"), "condition": d.get("condition"), "rain_prob": d.get("rain_prob_max")}
-                    for d in forecast_7d
-                ]
-            }
             return ToolResult(
                 tool_name=self.name,
                 success=True,
-                data=compact_forecast,
+                data=full_data,
                 latency_ms=elapsed,
                 provenance="Open-Meteo HRRR / NWP Multi-Model Forecast"
             )
@@ -370,8 +335,8 @@ class WarningTool(BaseTool):
 
     async def execute(self, **kwargs) -> ToolResult:
         t0 = time.time()
-        lat = kwargs.get("latitude", 20.7453)
-        lon = kwargs.get("longitude", 78.6022)
+        lat = kwargs.get("latitude") or kwargs.get("lat") or 20.7453
+        lon = kwargs.get("longitude") or kwargs.get("lon") or 78.6022
         dist = kwargs.get("district", "Wardha")
 
         try:
@@ -509,8 +474,8 @@ class EmergencyResourceTool(BaseTool):
 
     async def execute(self, **kwargs) -> ToolResult:
         t0 = time.time()
-        lat = kwargs.get("latitude", 20.7453)
-        lon = kwargs.get("longitude", 78.6022)
+        lat = kwargs.get("latitude") or kwargs.get("lat") or 20.7453
+        lon = kwargs.get("longitude") or kwargs.get("lon") or 78.6022
         dist = kwargs.get("district", "Wardha")
 
         try:

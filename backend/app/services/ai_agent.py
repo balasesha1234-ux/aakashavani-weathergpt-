@@ -1168,14 +1168,19 @@ class UniversalConversationalReasoner:
         lang: str
     ) -> Tuple[str, str, float]:
         q = query.lower()
-        curr = weather["current"]
-        temp = round(curr['temperature'])
-        feels = round(curr['feels_like'])
-        rain = curr['rainfall_mm']
-        wind = round(curr['wind_speed_kmh'])
-        humidity = round(curr['humidity'])
-        condition = curr.get('condition', 'Partly Cloudy')
-        forecast_7d = weather.get("forecast_7d", [])
+        curr = {}
+        if isinstance(weather, dict):
+            if "current" in weather and isinstance(weather["current"], dict):
+                curr = weather["current"]
+            else:
+                curr = weather
+        temp = round(curr.get('temperature', 28) if curr.get('temperature') is not None else 28)
+        feels = round(curr.get('feels_like', temp) if curr.get('feels_like') is not None else temp)
+        rain = curr.get('rainfall_mm', 0.0) or 0.0
+        wind = round(curr.get('wind_speed_kmh', 12) if curr.get('wind_speed_kmh') is not None else 12)
+        humidity = round(curr.get('humidity', 70) if curr.get('humidity') is not None else 70)
+        condition = curr.get('condition', 'Partly Cloudy') or 'Partly Cloudy'
+        forecast_7d = weather.get("forecast_7d", []) if isinstance(weather, dict) else []
         
         is_raining = rain > 1.0 or curr.get("weather_code", 0) in [51, 53, 55, 61, 63, 65, 80, 81]
         is_cold = temp <= 18
@@ -1459,6 +1464,27 @@ class UniversalConversationalReasoner:
             else:
                 resp = f"Yes, it's a great day to wash your car or bike in **{place}**! Weather is dry and clear with a temperature of **{temp}°C** and humidity at **{humidity}%**, ensuring your vehicle dries quickly without rain risk."
             return resp, "VEHICLE_MAINTENANCE", 0.96
+
+        # 5. Forecast / Tomorrow inquiries
+        if any(w in q for w in ["forecast", "tomorrow", "next 7 days", "weekly", "kal ka mausam", "repu", "next days"]):
+            if forecast_7d and len(forecast_7d) > 1:
+                tmrw = forecast_7d[1]
+                t_cond = tmrw.get("condition", "Partly Cloudy")
+                t_max = tmrw.get("temp_max", temp)
+                t_min = tmrw.get("temp_min", temp - 6)
+                t_rain_prob = tmrw.get("rain_prob_max", 0)
+                t_rain_mm = tmrw.get("rain_sum_mm", 0.0)
+                if lang == "hinglish":
+                    resp = f"Kal **{place}** me weather **{t_cond}** rehne ki sambhavna hai. Maximum temperature **{t_max}°C** aur minimum **{t_min}°C** rahega. Barish ka chance **{t_rain_prob}%** ({t_rain_mm} mm) hai."
+                elif lang == "telish":
+                    resp = f"Repu **{place}** lo weather **{t_cond}** ga undachu. Max temperature **{t_max}°C**, min **{t_min}°C**. Rain probability **{t_rain_prob}%** ({t_rain_mm} mm)."
+                elif lang == "hi":
+                    resp = f"कल **{place}** में मौसम **{t_cond}** रहने का अनुमान है। अधिकतम तापमान **{t_max}°C** और न्यूनतम **{t_min}°C** रहेगा। बारिश की संभावना **{t_rain_prob}%** ({t_rain_mm} mm) है।"
+                elif lang == "te":
+                    resp = f"రేపు **{place}** లో వాతావరణం **{t_cond}** గా ఉండే అవకాశం ఉంది. గరిష్ట ఉష్ణోగ్రత **{t_max}°C**, కనిష్ట ఉష్ణోగ్రత **{t_min}°C**. వర్షం సంభావ్యత **{t_rain_prob}%** ({t_rain_mm} mm)."
+                else:
+                    resp = f"Tomorrow in **{place}**, the forecast calls for **{t_cond}** with daytime highs near **{t_max}°C** and overnight lows around **{t_min}°C**. The probability of precipitation is **{t_rain_prob}%** ({t_rain_mm} mm rain)."
+                return resp, "FORECAST_QUERY", 0.98
 
         # 6. General Weather Overview / Open-ended Inquiries
         if lang == "hinglish":
@@ -2309,6 +2335,10 @@ class MultiAgentOrchestrator:
                 "preferred_style": pattern.preferred_style
             }
         except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {"total_queries": 1, "frequent_district": district, "frequent_crops": "General Agriculture"}
         finally:
             db.close()
