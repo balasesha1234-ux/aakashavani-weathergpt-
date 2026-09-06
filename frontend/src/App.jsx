@@ -633,37 +633,143 @@ export default function App() {
   // Dedicated Mobile Interface
   if (isMobileView) {
     return (
-      <PhoneSimulatorFrame
-        theme={theme}
-        onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-        onExitToDesktop={() => setForceViewMode('desktop')}
-        isMobileScreen={isMobileScreen}
-      >
-        <MobileApp
-          district={activeDistrict}
-          latitude={latitude}
-          longitude={longitude}
-          currentLang={currentLang}
-          onSelectLang={setCurrentLang}
-          isEmergencyActive={isEmergencyActive}
-          emergencyData={emergencyData}
-          onDetectGPS={handleDetectGPS}
-          onSendMessage={(msg) => {
-            handleSendMessage(msg);
-          }}
-          onOpenDesktopMode={() => setForceViewMode('desktop')}
-          onOpenSms={() => setSmsModalOpen(true)}
-          onOpenIvr={() => setIvrModalOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-          userProfile={userProfile}
-          onLogout={() => {
-            setUserProfile(null);
-            localStorage.removeItem('aakashavani_user');
-          }}
+      <div className={`w-full h-full min-h-screen overflow-hidden ${theme === 'light' ? 'light-theme bg-[#F5F7F3]' : 'bg-[#080C14]'}`}>
+        <PhoneSimulatorFrame
           theme={theme}
           onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          onExitToDesktop={() => setForceViewMode('desktop')}
+          isMobileScreen={isMobileScreen}
+        >
+          <MobileApp
+            district={activeDistrict}
+            latitude={latitude}
+            longitude={longitude}
+            currentLang={currentLang}
+            onSelectLang={setCurrentLang}
+            isEmergencyActive={isEmergencyActive}
+            emergencyData={emergencyData}
+            onDetectGPS={handleDetectGPS}
+            messages={currentMessages}
+            isLoading={isLoading}
+            onSendMessage={(msg, img) => {
+              return handleSendMessage(msg, img);
+            }}
+            onOpenLiveVoice={() => setLiveVoiceOpen(true)}
+            onClearChat={handleClearAllChats}
+            onOpenDesktopMode={() => setForceViewMode('desktop')}
+            onOpenSms={() => setSmsModalOpen(true)}
+            onOpenIvr={() => setIvrModalOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            userProfile={userProfile}
+            onLogout={() => {
+              setUserProfile(null);
+              localStorage.removeItem('aakashavani_user');
+            }}
+            theme={theme}
+            onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          />
+        </PhoneSimulatorFrame>
+
+        {/* Live 1-on-1 Hands-Free Voice Assistant Modal for Mobile */}
+        <LiveVoiceModal
+          isOpen={liveVoiceOpen}
+          onClose={() => setLiveVoiceOpen(false)}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+          currentLang={currentLang}
+          activeDistrict={activeDistrict}
+          currentMessages={currentMessages}
         />
-      </PhoneSimulatorFrame>
+
+        {/* Settings Modal for Mobile */}
+        <SettingsModal
+          isOpen={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          theme={theme}
+          onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          appMode={appMode}
+          onToggleMode={() => {
+            const nextMode = appMode === 'live' ? 'demo' : 'live';
+            setAppMode(nextMode);
+            localStorage.setItem('aakashavani_app_mode', nextMode);
+          }}
+        />
+
+        {/* 2G SMS Query Simulator Modal */}
+        {smsModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-base">2G SMS Fallback Simulator</h3>
+                <button 
+                  onClick={() => setSmsModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Simulate low-bandwidth feature phone access via GSM cellular protocol.
+              </p>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  defaultValue={`MAUSAM ${activeDistrict.toUpperCase()}`}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white"
+                  id="mobile-sms-input"
+                />
+                <button
+                  onClick={async () => {
+                    const val = document.getElementById('mobile-sms-input')?.value || `MAUSAM ${activeDistrict}`;
+                    try {
+                      const res = await simulateSMS(val);
+                      alert(`[2G SMS Dispatched]\nTo: 567678\nResponse:\n${res.sms_reply}`);
+                    } catch (e) {
+                      alert('SMS simulation error');
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+                >
+                  Send Simulated GSM SMS
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* IVR Toll-Free Hotline Simulator Modal */}
+        {ivrModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-base">IVR Toll-Free 1800-AAKASHA Hotline</h3>
+                <button 
+                  onClick={() => setIvrModalOpen(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Simulating Kisan Call Center voice telephony query.
+              </p>
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await simulateIVR(activeDistrict, currentLang);
+                    alert(`[IVR Voice Call Connected]\nAudio Script:\n${res.ivr_speech_script}`);
+                  } catch (e) {
+                    alert('IVR simulation error');
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs"
+              >
+                Dial Toll-Free Voice Call
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 

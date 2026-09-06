@@ -51,9 +51,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Referrer Policy to prevent data leakage across origins
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         
-        # Restrict hardware device access (Microphone & Geolocation allowed for self)
-        response.headers["Permissions-Policy"] = "microphone=(self), geolocation=(self), camera=()"
-        
         # Remove server identity header to obscure runtime details
         if "server" in response.headers:
             del response.headers["server"]

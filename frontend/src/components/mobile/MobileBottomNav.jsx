@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Map, History, Users, ShieldAlert } from 'lucide-react';
+import { Home, MessageSquare, Map, History, Users, ShieldAlert } from 'lucide-react';
 
 export default function MobileBottomNav({
   activeTab,
@@ -10,6 +10,7 @@ export default function MobileBottomNav({
   const labels = {
     te: {
       home: 'హోమ్',
+      chat: 'చాట్',
       map: 'మ్యాప్',
       timeline: 'చరిత్ర',
       desk: 'డెస్క్',
@@ -17,6 +18,7 @@ export default function MobileBottomNav({
     },
     hi: {
       home: 'होम',
+      chat: 'चैट',
       map: 'नक्शा',
       timeline: 'इतिहास',
       desk: 'डेस्क',
@@ -24,6 +26,7 @@ export default function MobileBottomNav({
     },
     en: {
       home: 'Home',
+      chat: 'Chat',
       map: 'Map',
       timeline: 'Flow',
       desk: 'Desk',
@@ -35,6 +38,7 @@ export default function MobileBottomNav({
 
   const tabs = [
     { id: 'home', label: l.home, icon: Home },
+    { id: 'chat', label: l.chat, icon: MessageSquare },
     { id: 'map', label: l.map, icon: Map },
     { id: 'timeline', label: l.timeline, icon: History },
     { id: 'desk', label: l.desk, icon: Users },

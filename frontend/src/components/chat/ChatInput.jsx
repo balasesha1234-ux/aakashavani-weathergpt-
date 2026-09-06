@@ -73,55 +73,14 @@ export default function ChatInput({
     'pa': 'ਪੰਜਾਬੀ (Punjabi)'
   };
 
+  // Cleanup on unmount
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recog = new SpeechRecognition();
-      recog.continuous = true;
-      recog.interimResults = true;
-      recog.lang = langMap[currentLang] || 'en-IN';
-
-      recog.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          const piece = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += piece + ' ';
-          } else {
-            interimTranscript += piece;
-          }
-        }
-
-        const base = baseTextRef.current ? baseTextRef.current.trim() + ' ' : '';
-        const currentTranscription = (base + finalTranscript + interimTranscript).trimStart();
-        setInputText(currentTranscription);
-
-        if (finalTranscript) {
-          baseTextRef.current = (base + finalTranscript).trimStart();
-        }
-      };
-
-      recog.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
-        if (event.error === 'not-allowed') {
-          setSpeechError('Microphone permission was denied in your browser.');
-          setIsListening(false);
-        } else if (event.error !== 'no-speech') {
-          setSpeechError('Voice typing paused. Tap mic to resume.');
-          setIsListening(false);
-        }
-        setTimeout(() => setSpeechError(null), 4000);
-      };
-
-      recog.onend = () => {
-        setIsListening(false);
-      };
-
-      recognitionRef.current = recog;
-    }
-  }, [currentLang]);
+    return () => {
+      try {
+        recognitionRef.current?.abort();
+      } catch (e) {}
+    };
+  }, []);
 
   // Click outside listener for plus menu
   useEffect(() => {
@@ -143,7 +102,7 @@ export default function ChatInput({
   }, [inputText]);
 
   // Toggle Voice Typing (Dictate words directly into textbox)
-  const toggleVoiceTyping = async () => {
+  const toggleVoiceTyping = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechError('Speech Recognition is not supported in this browser. Please use Chrome, Edge, or Safari.');
@@ -159,19 +118,6 @@ export default function ChatInput({
       return;
     }
 
-    // Explicitly verify & prompt for microphone access
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(t => t.stop());
-      } catch (micErr) {
-        console.warn('Microphone permission check error:', micErr);
-        setSpeechError('⚠️ Mic access denied. Click the lock icon in your browser URL bar to allow microphone.');
-        setTimeout(() => setSpeechError(null), 6000);
-        return;
-      }
-    }
-
     setSpeechError(null);
     baseTextRef.current = inputText;
 
@@ -181,8 +127,10 @@ export default function ChatInput({
       }
 
       const recog = new SpeechRecognition();
-      recog.continuous = true;
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+      recog.continuous = !isMobileDevice;
       recog.interimResults = true;
+      recog.maxAlternatives = 1;
       recog.lang = langMap[currentLang] || 'en-IN';
 
       recog.onresult = (event) => {
@@ -208,10 +156,12 @@ export default function ChatInput({
       };
 
       recog.onerror = (event) => {
-        console.warn('Speech recognition error:', event.error);
+        console.warn('Speech recognition error event:', event.error);
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-          setSpeechError('⚠️ Mic permission blocked. Allow microphone in browser address bar (lock icon).');
-        } else if (event.error !== 'no-speech') {
+          setSpeechError('⚠️ Mic access denied. Allow microphone in browser address bar (lock icon).');
+        } else if (event.error === 'audio-capture') {
+          setSpeechError('⚠️ Microphone not detected or in use by another app.');
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
           setSpeechError(`Voice paused (${event.error}). Tap mic to resume.`);
         }
         setIsListening(false);
@@ -326,7 +276,7 @@ export default function ChatInput({
       {menuOpen && (
         <div
           ref={menuRef}
-          className="absolute bottom-20 left-6 z-50 glass-panel p-3 rounded-3xl border shadow-2xl space-y-2 w-72 animate-in fade-in duration-150"
+          className="absolute bottom-20 left-2 sm:left-6 z-50 glass-panel p-3 rounded-3xl border shadow-2xl space-y-2 w-72 max-w-[calc(100vw-2rem)] animate-in fade-in duration-150"
         >
           {/* Quick 1-Click Demo Vision Presets */}
           <div className="border-b border-white/10 pb-2">
@@ -515,7 +465,7 @@ export default function ChatInput({
       </div>
 
       {/* Helper Footer */}
-      <div className="flex items-center justify-between px-2 pt-2 text-[11px] text-slate-500 font-medium">
+      <div className="hidden sm:flex items-center justify-between px-2 pt-1.5 text-[11px] text-slate-500 font-medium">
         <div className="flex items-center gap-2">
           <span>AakashaVani 1.0</span>
           <span>•</span>

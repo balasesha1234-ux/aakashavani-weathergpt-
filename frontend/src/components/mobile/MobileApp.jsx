@@ -8,6 +8,7 @@ import MobileDecisionDesk from './MobileDecisionDesk';
 import MobileAdvisoryCenter from './MobileAdvisoryCenter';
 import MobileMapView from './MobileMapView';
 import MobileVoiceSheet from './MobileVoiceSheet';
+import MobileChatView from './MobileChatView';
 import { 
   X, 
   Radio, 
@@ -33,7 +34,11 @@ export default function MobileApp({
   isEmergencyActive = false,
   emergencyData = null,
   onDetectGPS,
+  messages = [],
+  isLoading = false,
   onSendMessage,
+  onOpenLiveVoice,
+  onClearChat,
   onOpenDesktopMode,
   onOpenSms,
   onOpenIvr,
@@ -66,13 +71,14 @@ export default function MobileApp({
     if (onSendMessage) {
       onSendMessage(promptText);
     }
+    setActiveTab('chat');
   };
 
   return (
     <div className="relative w-full h-full max-w-md mx-auto bg-[#F5F8F5] dark:bg-[#070B14] flex flex-col font-sans transition-colors duration-200">
       
       {/* Active Screen Rendering with Smooth Touch & Mouse Scrolling */}
-      <main className="flex-1 w-full overflow-y-auto overscroll-contain touch-pan-y">
+      <main className={`flex-1 w-full ${activeTab === 'chat' ? 'overflow-hidden flex flex-col min-h-0' : 'overflow-y-auto overscroll-contain touch-pan-y'}`}>
         {activeTab === 'home' && (
           <MobileHomeView
             district={district}
@@ -92,6 +98,21 @@ export default function MobileApp({
             onOpenSituationRoom={() => setActiveTab('alerts')}
             theme={theme}
             onToggleTheme={onToggleTheme}
+          />
+        )}
+
+        {activeTab === 'chat' && (
+          <MobileChatView
+            district={district}
+            messages={messages}
+            isLoading={isLoading}
+            currentLang={currentLang}
+            onSendMessage={onSendMessage}
+            onOpenLiveVoice={onOpenLiveVoice}
+            onOpenSms={onOpenSms}
+            onOpenIvr={onOpenIvr}
+            onBack={() => setActiveTab('home')}
+            onClearChat={onClearChat}
           />
         )}
 
@@ -194,6 +215,7 @@ export default function MobileApp({
               <div className="py-4 space-y-1">
                 {[
                   { id: 'home', label: 'Farmer Dashboard', icon: Compass },
+                  { id: 'chat', label: 'Ask AakashaVani (AI Chat)', icon: MessageSquare },
                   { id: 'alerts', label: 'Situation Room', icon: ShieldAlert, badge: 'TACTICAL' },
                   { id: 'signals', label: 'Signal Intelligence', icon: Radio },
                   { id: 'timeline', label: 'Event Flow Timeline', icon: Compass },

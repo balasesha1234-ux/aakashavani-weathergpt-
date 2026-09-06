@@ -14,8 +14,14 @@ export default function LiveVoiceModal({
   const [isMuted, setIsMuted] = useState(false);
 
   const recognitionRef = useRef(null);
-  const synthRef = useRef(window.speechSynthesis);
+  const synthRef = useRef(typeof window !== 'undefined' ? window.speechSynthesis : null);
   const isListeningRef = useRef(false);
+  const voiceStateRef = useRef('listening');
+  const restartTimerRef = useRef(null);
+
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
 
   const langMap = {
     'en': 'en-IN',
@@ -52,39 +58,48 @@ export default function LiveVoiceModal({
       return;
     }
 
-    startListening();
+    voiceStateRef.current = 'listening';
+    setVoiceState('listening');
+    setTranscript('');
+    setAiSpokenText('');
 
-    return () => cleanupSpeech();
+    // Give browser a tick after modal open
+    const timer = setTimeout(() => {
+      startListening();
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      cleanupSpeech();
+    };
   }, [isOpen, currentLang]);
 
   const cleanupSpeech = () => {
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
     try {
       recognitionRef.current?.abort();
       recognitionRef.current = null;
     } catch (e) {}
     isListeningRef.current = false;
     if (synthRef.current) {
-      synthRef.current.cancel();
+      try {
+        synthRef.current.cancel();
+      } catch (e) {}
     }
   };
 
-  const startListening = async () => {
+  const startListening = () => {
+    if (!isOpen || voiceStateRef.current === 'thinking' || voiceStateRef.current === 'speaking') {
+      return;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setTranscript('Speech Recognition not supported in this browser. Use Chrome, Edge, or Safari.');
       return;
-    }
-
-    // Verify / prompt for microphone permission
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(t => t.stop());
-      } catch (err) {
-        console.warn('Microphone permission denied:', err);
-        setTranscript('⚠️ Microphone access blocked. Please allow mic in browser settings.');
-        return;
-      }
     }
 
     try {
@@ -92,9 +107,11 @@ export default function LiveVoiceModal({
         try { recognitionRef.current.abort(); } catch (e) {}
       }
 
+      const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
       const recog = new SpeechRecognition();
-      recog.continuous = false;
+      recog.continuous = !isMobileDevice;
       recog.interimResults = true;
+      recog.maxAlternatives = 1;
       recog.lang = langMap[currentLang] || 'en-IN';
 
       recog.onresult = (event) => {
@@ -109,7 +126,8 @@ export default function LiveVoiceModal({
           }
         }
 
-        setTranscript(final || interim);
+        const currentText = (final || interim).trim();
+        setTranscript(currentText);
 
         if (final && final.trim().length > 1) {
           handleUserSpeechFinal(final.trim());
@@ -117,31 +135,33 @@ export default function LiveVoiceModal({
       };
 
       recog.onerror = (e) => {
-        console.warn('Live voice recognition error:', e.error);
-        if (e.error === 'not-allowed') {
-          setTranscript('⚠️ Microphone permission denied in browser.');
+        console.warn('Live voice recognition event:', e.error);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          setTranscript('⚠️ Microphone permission blocked. Allow microphone in browser address bar (lock icon).');
           isListeningRef.current = false;
-        } else if (e.error === 'no-speech') {
-          if (isOpen && voiceState === 'listening') {
-            setTimeout(() => {
-              if (isOpen && voiceState === 'listening') startListening();
-            }, 300);
-          }
+        } else if (e.error === 'audio-capture') {
+          setTranscript('⚠️ Microphone not detected or unavailable.');
+          isListeningRef.current = false;
+        } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+          // Keep listening ready
         }
       };
 
       recog.onend = () => {
         isListeningRef.current = false;
-        if (isOpen && voiceState === 'listening') {
-          setTimeout(() => {
-            if (isOpen && voiceState === 'listening') startListening();
-          }, 300);
+        // Only restart if still in listening state and modal is open
+        if (isOpen && voiceStateRef.current === 'listening') {
+          restartTimerRef.current = setTimeout(() => {
+            if (isOpen && voiceStateRef.current === 'listening') {
+              startListening();
+            }
+          }, 350);
         }
       };
 
       recognitionRef.current = recog;
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
-      setTranscript('');
       recog.start();
       isListeningRef.current = true;
     } catch (err) {
@@ -151,22 +171,31 @@ export default function LiveVoiceModal({
   };
 
   const handleUserSpeechFinal = async (userText) => {
-    // Stop listening while AI thinks & speaks
+    if (!userText || !userText.trim()) return;
+
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+
     try {
       recognitionRef.current?.abort();
       recognitionRef.current = null;
     } catch (e) {}
     isListeningRef.current = false;
+
+    voiceStateRef.current = 'thinking';
     setVoiceState('thinking');
     setTranscript(userText);
 
     try {
-      const result = await onSendMessage(userText, null, true); // true = live voice query
+      const result = await onSendMessage(userText, null, true);
       const reply = result?.response_text || "Observations verified for your location.";
       setAiSpokenText(reply);
       speakAiResponse(reply);
     } catch (err) {
       console.error('Live voice error:', err);
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
       startListening();
     }
@@ -174,37 +203,57 @@ export default function LiveVoiceModal({
 
   const speakAiResponse = (text) => {
     if (!synthRef.current || isMuted) {
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
-      setTimeout(() => startListening(), 1000);
+      restartTimerRef.current = setTimeout(() => startListening(), 800);
       return;
     }
 
-    synthRef.current.cancel();
-    // Strip markdown formatting from spoken audio
-    const cleanText = text.replace(/[*#_`]/g, '').replace(/\[.*?\]/g, '').slice(0, 300);
+    try {
+      synthRef.current.cancel();
+    } catch (e) {}
 
+    const cleanText = text.replace(/[*#_`]/g, '').replace(/\[.*?\]/g, '').slice(0, 320);
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = langMap[currentLang] || 'en-IN';
-    utterance.rate = 1.05;
+    utterance.rate = 1.0;
 
-    // Pick Indian voice if available
-    const voices = synthRef.current.getVoices();
-    const indVoice = voices.find(v => v.lang.includes('IN') || v.name.includes('India'));
-    if (indVoice) utterance.voice = indVoice;
+    const voices = synthRef.current.getVoices ? synthRef.current.getVoices() : [];
+    if (voices && voices.length > 0) {
+      const targetLang = (langMap[currentLang] || 'en-IN').toLowerCase();
+      const shortLang = (currentLang || 'en').toLowerCase();
+      const matchedVoice =
+        voices.find(v => v.lang.toLowerCase() === targetLang) ||
+        voices.find(v => v.lang.toLowerCase().startsWith(shortLang)) ||
+        voices.find(v => v.lang.includes('IN') || v.name.toLowerCase().includes('india')) ||
+        voices[0];
+      if (matchedVoice) utterance.voice = matchedVoice;
+    }
 
+    voiceStateRef.current = 'speaking';
     setVoiceState('speaking');
 
     utterance.onend = () => {
-      // Once AI finishes speaking, transition back to listening for 1-on-1 loop!
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
       setTranscript('');
       setAiSpokenText('');
-      setTimeout(() => startListening(), 400);
+      restartTimerRef.current = setTimeout(() => {
+        if (isOpen && voiceStateRef.current === 'listening') {
+          startListening();
+        }
+      }, 400);
     };
 
-    utterance.onerror = () => {
+    utterance.onerror = (e) => {
+      console.warn('Speech synthesis error:', e);
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
-      setTimeout(() => startListening(), 400);
+      restartTimerRef.current = setTimeout(() => {
+        if (isOpen && voiceStateRef.current === 'listening') {
+          startListening();
+        }
+      }, 400);
     };
 
     synthRef.current.speak(utterance);
@@ -212,7 +261,10 @@ export default function LiveVoiceModal({
 
   const handleOrbClick = () => {
     if (voiceState === 'speaking') {
-      if (synthRef.current) synthRef.current.cancel();
+      if (synthRef.current) {
+        try { synthRef.current.cancel(); } catch (e) {}
+      }
+      voiceStateRef.current = 'listening';
       setVoiceState('listening');
       startListening();
     } else if (voiceState === 'listening') {
@@ -222,6 +274,8 @@ export default function LiveVoiceModal({
         startListening();
       }
     } else {
+      voiceStateRef.current = 'listening';
+      setVoiceState('listening');
       startListening();
     }
   };
