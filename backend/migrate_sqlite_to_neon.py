@@ -1,12 +1,18 @@
 """
 Copies all existing records from local SQLite (aakashavani.db) to Neon PostgreSQL.
 """
+import os
 import sqlite3
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.models import Base, User, OTPVerification
 
-neon_url = "postgresql://neondb_owner:npg_XILEgkbmG63M@ep-dry-surf-az80x83s-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+neon_url = os.getenv("DATABASE_URL")
+if not neon_url or "sqlite" in neon_url:
+    print("[ERROR] Please set DATABASE_URL to your PostgreSQL connection string in the environment.")
+    print("Example: export DATABASE_URL='postgresql://neondb_owner:YOUR_PASSWORD@host/neondb?sslmode=require'")
+    exit(1)
+
 neon_engine = create_engine(neon_url)
 NeonSession = sessionmaker(bind=neon_engine)
 neon_db = NeonSession()
