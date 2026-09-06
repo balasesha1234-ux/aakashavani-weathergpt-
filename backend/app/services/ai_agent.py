@@ -4,7 +4,7 @@ import time
 import httpx
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Tuple, List, Set
 from datetime import datetime, timezone, timedelta
 
 from .weather_service import WeatherService
