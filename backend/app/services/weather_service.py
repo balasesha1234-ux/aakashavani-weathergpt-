@@ -22,20 +22,22 @@ class WeatherService:
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
             f"latitude={lat}&longitude={lon}&"
-            f"current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_gusts_10m&"
+            f"current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_gusts_10m,surface_pressure&"
             f"hourly=temperature_2m,relative_humidity_2m,precipitation_probability,precipitation,wind_speed_10m&"
             f"daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&"
             f"timezone=Asia%2FKolkata"
         )
         try:
-            async with httpx.AsyncClient(timeout=6.0) as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    latency_ms = int((time.time() - start_t) * 1000)
-                    normalized = WeatherService._normalize_weather_data(data, lat, lon, latency_ms)
-                    await cache_service.set(cache_key, normalized, ttl_seconds=180)
-                    return normalized
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                for attempt in range(2):
+                    resp = await client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        latency_ms = int((time.time() - start_t) * 1000)
+                        normalized = WeatherService._normalize_weather_data(data, lat, lon, latency_ms)
+                        await cache_service.set(cache_key, normalized, ttl_seconds=180)
+                        return normalized
+                    print(f"Live weather provider returned HTTP {resp.status_code} (attempt {attempt + 1}/2)")
         except Exception as e:
             print(f"Live weather fetch fallback due to: {e}")
 
@@ -117,6 +119,7 @@ class WeatherService:
                 "rainfall_mm": rain,
                 "wind_speed_kmh": wind_speed,
                 "wind_gusts_kmh": wind_gusts,
+                "pressure_hpa": current.get("surface_pressure"),
                 "condition": condition,
                 "weather_code": code,
                 "observed_at": now_iso
@@ -175,6 +178,7 @@ class WeatherService:
                 "rainfall_mm": 18.5,
                 "wind_speed_kmh": 21.0,
                 "wind_gusts_kmh": 35.0,
+                "pressure_hpa": None,
                 "condition": "Moderate Rain",
                 "weather_code": 63,
                 "observed_at": now.isoformat()
@@ -196,6 +200,7 @@ class WeatherService:
                 }
             ],
             "is_mock_data": True,
+            "fallback_reason": "Live Open-Meteo observation unavailable; values must not be presented as location-specific telemetry.",
             "latency_ms": latency_ms
         }
 

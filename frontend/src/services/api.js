@@ -18,6 +18,7 @@ export async function sendChatMessage({ query, latitude, longitude, district, la
 export async function getCurrentWeather(lat = 20.7453, lon = 78.6022) {
   try {
     const res = await fetch(`${API_BASE_URL}/api/weather/current?lat=${lat}&lon=${lon}`);
+    if (!res.ok) throw new Error(`Weather server returned ${res.status}`);
     return await res.json();
   } catch (err) {
     console.error('Weather API Error:', err);
@@ -28,6 +29,7 @@ export async function getCurrentWeather(lat = 20.7453, lon = 78.6022) {
 export async function getWeatherForecast(lat = 20.7453, lon = 78.6022) {
   try {
     const res = await fetch(`${API_BASE_URL}/api/weather/forecast?lat=${lat}&lon=${lon}`);
+    if (!res.ok) throw new Error(`Forecast server returned ${res.status}`);
     return await res.json();
   } catch (err) {
     console.error('Weather Forecast API Error:', err);

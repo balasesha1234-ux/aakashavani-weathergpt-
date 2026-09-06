@@ -59,6 +59,7 @@ export default function HomeView({
   const [emergencyData, setEmergencyData] = useState(null);
   const [queryInput, setQueryInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
 
   useEffect(() => {
@@ -72,6 +73,7 @@ export default function HomeView({
         if (isMounted) {
           setWeatherData(wData);
           setEmergencyData(eData);
+          setWeatherError(!wData || wData.is_mock_data === true);
         }
       } catch (err) {
         console.error('HomeView load error:', err);
@@ -123,15 +125,20 @@ export default function HomeView({
       .catch(() => {});
   }, []);
 
-  const curr = weatherData?.current || {
-    temperature: 28,
-    feels_like: 31,
-    humidity: 72,
-    rainfall_mm: 0.0,
-    wind_speed_kmh: 15,
-    condition: 'Partly Cloudy',
-    pressure: 1010
+  const curr = weatherData && !weatherData.is_mock_data ? weatherData.current : {
+    temperature: null,
+    humidity: null,
+    rainfall_mm: null,
+    wind_speed_kmh: null,
+    pressure_hpa: null,
+    condition: 'Weather unavailable'
   };
+  const warning = emergencyData?.warning;
+  const alertItems = warning ? [{
+    title: `${warning.hazard_type || 'Weather'} Alert`,
+    area: warning.affected_districts || district,
+    time: warning.expires_at ? `Until ${new Date(warning.expires_at).toLocaleString()}` : 'Active now'
+  }] : [];
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -511,7 +518,7 @@ export default function HomeView({
               <Sun className="w-4 h-4 text-amber-500 shrink-0" />
               <div className="text-left">
                 <div className="text-xs font-black text-slate-900 dark:text-white leading-none">
-                  {roundTemperature(curr.temperature)}°C
+                  {formatMetric(curr.temperature, '°C')}
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 leading-none mt-0.5">
                   {district}
@@ -712,37 +719,24 @@ export default function HomeView({
                   </h3>
                 </div>
                 <span className="w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
-                  2
+                  {alertItems.length}
                 </span>
               </div>
 
-              {/* Alert Item 1: Heavy Rain Alert (Soft Red) */}
-              <div className="p-3 rounded-2xl bg-[#FDF2F2] dark:bg-rose-950/30 border border-[#FADBD8] dark:border-rose-900/40 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 dark:text-rose-300">
-                  <CloudRain className="w-3.5 h-3.5 text-rose-600" />
-                  <span>Heavy Rain Alert</span>
+              {alertItems.length ? alertItems.map((alert) => (
+                <div key={alert.title} className="p-3 rounded-2xl bg-[#FDF2F2] dark:bg-rose-950/30 border border-[#FADBD8] dark:border-rose-900/40 space-y-1">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-rose-800 dark:text-rose-300">
+                    <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>{alert.title}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">{alert.area}</div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500">{alert.time}</div>
                 </div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                  Waradha, Yavatmal, Chandrapur
+              )) : (
+                <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 text-xs text-emerald-800 dark:text-emerald-300">
+                  No active verified warning for {district}.
                 </div>
-                <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                  11 May, 08:00 AM varaku
-                </div>
-              </div>
-
-              {/* Alert Item 2: Thunderstorm Alert (Soft Amber) */}
-              <div className="p-3 rounded-2xl bg-[#FEF9E7] dark:bg-amber-950/30 border border-[#FCF3CF] dark:border-amber-900/40 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
-                  <Zap className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Thunderstorm Alert</span>
-                </div>
-                <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                  Nagpur, Bhandara
-                </div>
-                <div className="text-[10px] text-slate-400 dark:text-slate-500">
-                  11 May, 05:00 PM varaku
-                </div>
-              </div>
+              )}
 
               {/* Footer: View All Link */}
               <div className="pt-1 text-right">
@@ -864,8 +858,8 @@ export default function HomeView({
                 <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
                   {t.nowTitle}
                 </h3>
-                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                  ● Live Telemetry
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${weatherError ? 'text-amber-700 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300' : 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 dark:text-emerald-400'}`}>
+                  {loading ? 'Loading telemetry...' : weatherError ? 'Live data unavailable' : '● Live Telemetry'}
                 </span>
               </div>
 
@@ -873,7 +867,7 @@ export default function HomeView({
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                   <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
-                    {roundTemperature(curr.temperature)}°<span className="text-lg font-normal text-slate-500">c</span>
+                    {formatMetric(curr.temperature, '°')}<span className="text-lg font-normal text-slate-500">c</span>
                   </span>
                   <Sun className="w-6 h-6 text-amber-500 shrink-0" />
                 </div>
@@ -882,19 +876,19 @@ export default function HomeView({
                 <div className="grid grid-cols-2 gap-2 text-[11px]">
                   <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <Droplets className="w-3.5 h-3.5 text-sky-500" />
-                    <span><strong>{curr.humidity}%</strong> Humidity</span>
+                    <span><strong>{formatMetric(curr.humidity, '%')}</strong> Humidity</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <Wind className="w-3.5 h-3.5 text-teal-500" />
-                    <span><strong>{roundTemperature(curr.wind_speed_kmh)} km/h</strong> Wind</span>
+                    <span><strong>{formatMetric(curr.wind_speed_kmh, ' km/h')}</strong> Wind</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <Gauge className="w-3.5 h-3.5 text-indigo-500" />
-                    <span><strong>1010 hPa</strong> Pressure</span>
+                    <span><strong>{formatMetric(curr.pressure_hpa, ' hPa')}</strong> Pressure</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
                     <CloudRain className="w-3.5 h-3.5 text-blue-500" />
-                    <span><strong>25 mm</strong> Rain (24h)</span>
+                    <span><strong>{formatMetric(curr.rainfall_mm, ' mm')}</strong> Rain</span>
                   </div>
                 </div>
               </div>
@@ -966,7 +960,7 @@ export default function HomeView({
   );
 }
 
-function roundTemperature(val) {
-  if (val === null || val === undefined) return 28;
-  return Math.round(Number(val));
+function formatMetric(value, suffix = '', unavailable = '--') {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return unavailable;
+  return `${Math.round(Number(value))}${suffix}`;
 }
