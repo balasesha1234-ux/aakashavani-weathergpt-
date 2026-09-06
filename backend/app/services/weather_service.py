@@ -3,25 +3,21 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 
-# In-memory cache for Open-Meteo physical telemetry (3-minute TTL)
-_WEATHER_CACHE: Dict[tuple, tuple] = {}
-CACHE_TTL_SECONDS = 180
+from .cache_service import cache_service
 
 class WeatherService:
     @staticmethod
     async def get_live_weather(lat: float, lon: float) -> Dict[str, Any]:
-        """Fetch live weather metrics and 7-day forecast from Open-Meteo Physical NWP API with 3-minute TTL cache."""
+        """Fetch live weather metrics and 7-day forecast from Open-Meteo Physical NWP API with Redis/In-Memory hybrid cache."""
         start_t = time.time()
-        cache_key = (round(lat, 2), round(lon, 2))
-        now = time.time()
+        cache_key = f"weather:{round(lat, 2)}:{round(lon, 2)}"
 
-        if cache_key in _WEATHER_CACHE:
-            cached_time, cached_data = _WEATHER_CACHE[cache_key]
-            if now - cached_time < CACHE_TTL_SECONDS:
-                cached_res = dict(cached_data)
-                cached_res["latency_ms"] = int((now - start_t) * 1000)
-                cached_res["cache_hit"] = True
-                return cached_res
+        cached_data = await cache_service.get(cache_key)
+        if cached_data:
+            cached_res = dict(cached_data)
+            cached_res["latency_ms"] = int((time.time() - start_t) * 1000)
+            cached_res["cache_hit"] = True
+            return cached_res
 
         url = (
             f"https://api.open-meteo.com/v1/forecast?"
@@ -38,7 +34,7 @@ class WeatherService:
                     data = resp.json()
                     latency_ms = int((time.time() - start_t) * 1000)
                     normalized = WeatherService._normalize_weather_data(data, lat, lon, latency_ms)
-                    _WEATHER_CACHE[cache_key] = (now, normalized)
+                    await cache_service.set(cache_key, normalized, ttl_seconds=180)
                     return normalized
         except Exception as e:
             print(f"Live weather fetch fallback due to: {e}")
