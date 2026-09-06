@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -16,7 +17,8 @@ except ImportError:
 
 # Ensure SQLite path is always absolute to backend/ directory
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-default_sqlite_path = f"sqlite:///{os.path.join(backend_dir, 'aakashavani.db').replace('\\', '/')}"
+sqlite_file = Path(backend_dir) / "aakashavani.db"
+default_sqlite_path = f"sqlite:///{sqlite_file.as_posix()}"
 
 from sqlalchemy import event, text
 
