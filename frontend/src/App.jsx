@@ -772,8 +772,25 @@ export default function App() {
           />
         )}
 
-        {/* View 5: Fallback 404 Unmapped Sector Page */}
-        {!['home', 'ask', 'map', 'alerts'].includes(activeWorkspace) && (
+        {/* View 5: Dedicated Full Login / Auth Page */}
+        {activeWorkspace === 'login' && (
+          <div className="flex-1 overflow-y-auto">
+            <AuthPage
+              onLoginSuccess={(profile) => {
+                setUserProfile(profile);
+                if (profile?.district) setActiveDistrict(profile.district.split(',')[0].trim());
+                setActiveWorkspace('home');
+              }}
+              onBackToApp={() => setActiveWorkspace('home')}
+              initialTheme={theme}
+              currentLang={currentLang}
+              onLanguageChange={setCurrentLang}
+            />
+          </div>
+        )}
+
+        {/* View 6: Fallback 404 Unmapped Sector Page */}
+        {!['home', 'ask', 'map', 'alerts', 'login'].includes(activeWorkspace) && (
           <NotFoundPage onNavigateHome={() => setActiveWorkspace('home')} />
         )}
 
