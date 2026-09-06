@@ -8,15 +8,17 @@ import {
   Radio, 
   Sparkles, 
   RotateCcw,
-  CloudRain,
-  Sprout,
-  ShieldAlert,
-  Compass
+  Mic,
+  MicOff,
+  ArrowUp,
+  Plus,
+  Image as ImageIcon,
+  Camera,
+  X
 } from 'lucide-react';
-import ChatInput from '../chat/ChatInput';
 
 export default function MobileChatView({
-  district = 'Waradha, Maharashtra',
+  district = 'Hyderabad',
   messages = [],
   isLoading = false,
   currentLang = 'te',
@@ -27,20 +29,44 @@ export default function MobileChatView({
   onBack,
   onClearChat
 }) {
-  const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [inputText, setInputText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [attachedImage, setAttachedImage] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [speechError, setSpeechError] = useState(null);
 
-  // Auto-scroll to latest message
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  const langMap = {
+    'en': 'en-IN',
+    'hi': 'hi-IN',
+    'te': 'te-IN',
+    'ta': 'ta-IN',
+    'mr': 'mr-IN',
+    'bn': 'bn-IN',
+    'kn': 'kn-IN',
+    'gu': 'gu-IN',
+    'hinglish': 'hi-IN',
+    'telish': 'te-IN'
+  };
+
+  // Auto-scroll ONLY the messages container without scrolling window/body
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
   }, [messages, isLoading]);
 
   // Audio Speech Readout for messages
   const toggleSpeech = (text, index) => {
-    if (!('speechSynthesis' in window)) {
-      alert('Text-to-speech audio is not supported in this browser.');
-      return;
-    }
+    if (!('speechSynthesis' in window)) return;
 
     if (speakingIndex === index) {
       window.speechSynthesis.cancel();
@@ -49,21 +75,8 @@ export default function MobileChatView({
     }
 
     window.speechSynthesis.cancel();
-    const cleanText = text.replace(/[*#_`]/g, '').replace(/\[.*?\]/g, '').slice(0, 400);
+    const cleanText = text.replace(/[*#_`]/g, '').replace(/\[.*?\]/g, '').slice(0, 300);
     const utterance = new SpeechSynthesisUtterance(cleanText);
-
-    const langMap = {
-      'en': 'en-IN',
-      'hi': 'hi-IN',
-      'te': 'te-IN',
-      'ta': 'ta-IN',
-      'mr': 'mr-IN',
-      'bn': 'bn-IN',
-      'kn': 'kn-IN',
-      'gu': 'gu-IN',
-      'hinglish': 'hi-IN',
-      'telish': 'te-IN'
-    };
     utterance.lang = langMap[currentLang] || 'en-IN';
     utterance.rate = 0.95;
 
@@ -74,116 +87,182 @@ export default function MobileChatView({
     window.speechSynthesis.speak(utterance);
   };
 
-  // Quick Starter Prompts by Language
+  // Mobile Voice Typing Handler
+  const toggleVoiceTyping = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechError('Mic not supported');
+      setTimeout(() => setSpeechError(null), 3000);
+      return;
+    }
+
+    if (isListening) {
+      try { recognitionRef.current?.stop(); } catch (e) {}
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      const recog = new SpeechRecognition();
+      recog.continuous = false;
+      recog.interimResults = true;
+      recog.lang = langMap[currentLang] || 'en-IN';
+
+      recog.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript) {
+          setInputText(prev => (prev ? prev + ' ' + transcript : transcript).trimStart());
+        }
+      };
+
+      recog.onerror = (e) => {
+        if (e.error !== 'no-speech' && e.error !== 'aborted') {
+          setSpeechError(e.error === 'not-allowed' ? 'Mic blocked' : 'Voice error');
+          setTimeout(() => setSpeechError(null), 3000);
+        }
+        setIsListening(false);
+      };
+
+      recog.onend = () => setIsListening(false);
+
+      recognitionRef.current = recog;
+      recog.start();
+      setIsListening(true);
+    } catch (err) {
+      setIsListening(false);
+    }
+  };
+
+  const handleSend = () => {
+    if (!inputText.trim() && !attachedImage) return;
+    if (isListening) {
+      try { recognitionRef.current?.stop(); } catch (e) {}
+      setIsListening(false);
+    }
+    onSendMessage(inputText.trim(), attachedImage?.dataUrl);
+    setInputText('');
+    setAttachedImage(null);
+    setMenuOpen(false);
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      setAttachedImage({ name: file.name, dataUrl: evt.target.result });
+      setMenuOpen(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Quick Starter Prompts
   const promptMap = {
     te: [
-      { label: "🌧️ వర్షం పడుతుందా?", query: `${district} లో ఈరోజు లేదా రేపు భారీ వర్షం పడే అవకాశం ఉందా?` },
-      { label: "🌾 పత్తి పంట సలహా", query: `${district} లో పత్తి పంటకు పురుగుమందు ఎప్పుడు పిచికారీ చేయాలి?` },
-      { label: "🚨 ఏదైనా హెచ్చరిక ఉందా?", query: `${district} పరిధిలో ఏవైనా తుఫాను లేదా వరద హెచ్చరికలు ఉన్నాయా?` }
+      { label: "🌧️ వర్షం పడుతుందా?", query: `${district} లో ఈరోజు వర్షం పడే అవకాశం ఉందా?` },
+      { label: "🌾 పంటకు మందు ఎప్పుడు కొట్టాలి?", query: `${district} లో పంటకు మందు ఎప్పుడు పిచికారీ చేయాలి?` },
+      { label: "🚨 ఏదైనా తుఫాను హెచ్చరిక ఉందా?", query: `${district} పరిధిలో ఏవైనా వాతావరణ హెచ్చరికలు ఉన్నాయా?` }
     ],
     hi: [
-      { label: "🌧️ क्या बारिश होगी?", query: `क्या ${district} में आज या कल भारी बारिश की संभावना है?` },
-      { label: "🌾 कीटनाशक छिड़काव", query: `${district} में फसल पर कीटनाशक का छिड़काव कब करें?` },
-      { label: "🚨 क्या कोई अलर्ट है?", query: `क्या ${district} के लिए कोई आंधी, तूफान या मौसम अलर्ट है?` }
+      { label: "🌧️ क्या आज बारिश होगी?", query: `क्या ${district} में आज बारिश की संभावना है?` },
+      { label: "🌾 कीटनाशक छिड़काव सलाह", query: `${district} में कीटनाशक छिड़काव कब करें?` },
+      { label: "🚨 क्या कोई मौसम अलर्ट है?", query: `क्या ${district} के लिए कोई आंधी-तूफान अलर्ट है?` }
     ],
     en: [
-      { label: "🌧️ Will it rain today?", query: `Is there any rain or storm expected in ${district} today or tomorrow?` },
-      { label: "🌾 Crop Spraying Advisory", query: `When is the safest window to spray pesticides on crops in ${district}?` },
-      { label: "🚨 Disaster Warning Status", query: `Are there any active flood, cyclone, or severe weather alerts in ${district}?` }
+      { label: "🌧️ Will it rain today?", query: `Will it rain today in ${district}?` },
+      { label: "🌾 Crop Spraying Advisory", query: `Can I spray pesticides on crops today in ${district}?` },
+      { label: "🚨 Any severe weather alert?", query: `Are there any active weather alerts for ${district}?` }
     ]
   };
-
   const quickPrompts = promptMap[currentLang] || promptMap.en;
 
-  const headerTitles = {
-    te: { title: 'ఆకాశవాణి AI', sub: `${district} • ప్రత్యక్ష వాతావరణ సమాచారం` },
-    hi: { title: 'आकाशवाणी AI', sub: `${district} • लाइव मौसम व कृषि सलाह` },
-    en: { title: 'AakashaVani AI', sub: `${district} • Grounded Meteorological Intel` }
+  const placeholders = {
+    te: 'వాతావరణం లేదా పంట గురించి అడగండి...',
+    hi: 'मौसम या फसल के बारे में पूछें...',
+    en: 'Ask weather, crop advisory...'
   };
-  const h = headerTitles[currentLang] || headerTitles.en;
+  const currentPlaceholder = placeholders[currentLang] || placeholders.en;
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#F5F8F5] dark:bg-[#070B14] overflow-hidden">
+    <div className="w-full h-full flex flex-col bg-[#F5F8F5] dark:bg-[#070B14] overflow-hidden min-h-0 relative">
       
-      {/* Mobile Chat Header */}
-      <header className="shrink-0 px-3 py-2.5 bg-white/95 dark:bg-[#0B111C]/95 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 flex items-center justify-between z-30">
+      {/* 1. Pinned Sticky Mobile Chat Header */}
+      <header className="sticky top-0 z-30 shrink-0 w-full px-3 py-2.5 bg-white/95 dark:bg-[#0B111C]/95 backdrop-blur-xl border-b border-slate-200 dark:border-white/10 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2">
           {onBack && (
             <button
               onClick={onBack}
-              className="p-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              title="Back"
+              className="p-1.5 -ml-1 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Back to Home"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
           )}
 
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-500 flex items-center justify-center text-white font-black shadow-sm">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 flex items-center justify-center text-white font-black shadow-sm shrink-0">
             <Bot className="w-4 h-4" />
           </div>
 
-          <div>
+          <div className="leading-tight">
             <h3 className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
-              <span>{h.title}</span>
+              <span>AakashaVani</span>
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             </h3>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[180px]">
-              {h.sub}
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
+              {district} • Live Radar
             </p>
           </div>
         </div>
 
-        {/* Header Right Actions */}
+        {/* Header Right: Live Voice Button & Clear */}
         <div className="flex items-center gap-1.5">
-          {/* 1-on-1 Live Voice Button */}
           {onOpenLiveVoice && (
             <button
               onClick={onOpenLiveVoice}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-700 dark:text-cyan-300 text-xs font-bold transition-all shadow-xs"
-              title="1-on-1 Voice Mode"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-600 dark:text-cyan-300 text-[11px] font-bold transition-all shadow-xs"
+              title="1-on-1 Live Voice"
             >
-              <Radio className="w-3.5 h-3.5 animate-pulse text-cyan-500" />
-              <span className="text-[11px]">Voice</span>
+              <Radio className="w-3 h-3 animate-pulse text-cyan-500" />
+              <span>Voice</span>
             </button>
           )}
 
           {onClearChat && messages.length > 0 && (
             <button
               onClick={onClearChat}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
               title="Clear Conversation"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </header>
 
-      {/* Messages Scroll Viewport */}
-      <div className="flex-1 w-full overflow-y-auto px-3 py-3 space-y-3 overscroll-contain touch-pan-y">
-        
-        {/* Empty State with Quick Prompts */}
+      {/* 2. Messages Scroll Container */}
+      <div 
+        ref={scrollContainerRef}
+        className="flex-1 w-full overflow-y-auto px-3 py-3 space-y-3 overscroll-contain touch-pan-y min-h-0"
+      >
+        {/* Empty State */}
         {messages.length === 0 && (
           <div className="py-6 px-2 flex flex-col items-center text-center animate-fade-in">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-3 shadow-inner">
               <Sparkles className="w-6 h-6 animate-pulse" />
             </div>
             <h4 className="text-sm font-black text-slate-900 dark:text-white">
-              {currentLang === 'te' ? 'ఆకాశవాణి వాతావరణ అసిస్టెంట్' : currentLang === 'hi' ? 'आकाशवाणी मौसम सहायक' : 'AakashaVani Weather Assistant'}
+              {currentLang === 'te' ? 'ఆకాశవాణి AI సంభాషణ' : currentLang === 'hi' ? 'आकाशवाणी मौसम सहायक' : 'AakashaVani Weather Assistant'}
             </h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 max-w-xs mt-1 leading-relaxed">
               {currentLang === 'te' 
                 ? 'వ్యవసాయ సలహాలు, వర్ష సూచనలు లేదా విపత్తు హెచ్చరికలను నేరుగా అడగండి.'
-                : currentLang === 'hi'
-                ? 'फसल सलाह, बारिश का पूर्वानुमान या आपदा चेतावनियों के बारे में पूछें।'
                 : 'Ask questions about rainfall forecasts, agromet spraying windows, or disaster alerts.'}
             </p>
 
-            {/* Quick Prompt Cards */}
             <div className="w-full space-y-2 mt-5 text-left">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1 block">
-                {currentLang === 'te' ? 'త్వరిత ప్రశ్నలు' : currentLang === 'hi' ? 'त्वरित प्रश्न' : 'Suggested Questions'}
-              </span>
               {quickPrompts.map((p, idx) => (
                 <button
                   key={idx}
@@ -198,7 +277,7 @@ export default function MobileChatView({
           </div>
         )}
 
-        {/* Message Bubble Feed */}
+        {/* Message Bubble Stream */}
         {messages.map((msg, idx) => {
           const isUser = msg.sender === 'user';
           const isSpeaking = speakingIndex === idx;
@@ -208,7 +287,6 @@ export default function MobileChatView({
               key={idx}
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-fade-in`}
             >
-              {/* Message Bubble */}
               <div
                 className={`rounded-2xl px-3.5 py-2.5 text-xs max-w-[88%] leading-relaxed break-words shadow-xs ${
                   isUser
@@ -216,48 +294,29 @@ export default function MobileChatView({
                     : 'bg-white dark:bg-[#0E1626] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-white/10 rounded-bl-xs'
                 }`}
               >
-                {/* Attached Image Thumbnail */}
                 {msg.imageUrl && (
                   <div className="mb-2 rounded-xl overflow-hidden border border-white/20">
-                    <img
-                      src={msg.imageUrl}
-                      alt="Uploaded crop or hazard"
-                      className="w-full max-h-48 object-cover"
-                    />
+                    <img src={msg.imageUrl} alt="Upload" className="w-full max-h-48 object-cover" />
                   </div>
                 )}
 
-                {/* Message Text */}
                 <div className="whitespace-pre-wrap">{msg.text}</div>
 
-                {/* Assistant Message Extra Badges / Audio Playback */}
                 {!isUser && (
                   <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/10 flex items-center justify-between gap-2 text-[10px] text-slate-400">
-                    <span className="flex items-center gap-1 font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">
-                      <span>✓ IMD Grounded</span>
+                    <span className="font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">
+                      ✓ IMD Grounded
                     </span>
-
-                    {/* TTS Audio Readout Button */}
                     <button
                       onClick={() => toggleSpeech(msg.text, idx)}
-                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-colors ${
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] transition-colors ${
                         isSpeaking
                           ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-bold'
-                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:text-emerald-500'
+                          : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300'
                       }`}
-                      title={isSpeaking ? "Mute Readout" : "Listen in your language"}
                     >
-                      {isSpeaking ? (
-                        <>
-                          <VolumeX className="w-3 h-3 text-emerald-500" />
-                          <span>Stop</span>
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="w-3 h-3" />
-                          <span>Listen</span>
-                        </>
-                      )}
+                      {isSpeaking ? <VolumeX className="w-3 h-3 text-emerald-500" /> : <Volume2 className="w-3 h-3" />}
+                      <span>{isSpeaking ? 'Stop' : 'Listen'}</span>
                     </button>
                   </div>
                 )}
@@ -269,28 +328,148 @@ export default function MobileChatView({
         {/* Loading Bubble */}
         {isLoading && (
           <div className="flex items-start animate-fade-in">
-            <div className="rounded-2xl rounded-bl-xs px-4 py-3 bg-white dark:bg-[#0E1626] border border-slate-200/80 dark:border-white/10 shadow-xs flex items-center gap-2">
+            <div className="rounded-2xl rounded-bl-xs px-3.5 py-2.5 bg-white dark:bg-[#0E1626] border border-slate-200/80 dark:border-white/10 shadow-xs flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce"></span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.15s]"></span>
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-bounce [animation-delay:0.3s]"></span>
-              <span className="text-[11px] font-semibold text-slate-500 ml-1">Analyzing weather models...</span>
+              <span className="text-[11px] font-semibold text-slate-500 ml-1">Analyzing models...</span>
             </div>
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Sticky Bottom Chat Input Bar */}
-      <div className="shrink-0 w-full bg-white/95 dark:bg-[#070B14]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10 pt-1.5 pb-1">
-        <ChatInput
-          onSendMessage={onSendMessage}
-          onOpenLiveVoice={onOpenLiveVoice}
-          onSimulateSMS={onOpenSms}
-          onSimulateIVR={onOpenIvr}
-          isLoading={isLoading}
-          currentLang={currentLang}
-        />
+      {/* 3. Sleek, Compact Mobile Chat Input Bar */}
+      <div className="shrink-0 w-full bg-white/95 dark:bg-[#0B111C]/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-white/10 px-3 py-2 z-30">
+        
+        {/* Speech Error Banner */}
+        {speechError && (
+          <div className="mb-1.5 py-1 px-2.5 rounded-xl bg-rose-500/20 text-rose-300 text-[10px] flex items-center justify-between">
+            <span>⚠️ {speechError}</span>
+            <button onClick={() => setSpeechError(null)} className="p-0.5">✕</button>
+          </div>
+        )}
+
+        {/* Attached Photo Preview */}
+        {attachedImage && (
+          <div className="mb-1.5 flex items-center gap-2 px-1">
+            <div className="relative rounded-lg overflow-hidden border border-white/20">
+              <img src={attachedImage.dataUrl} alt="Preview" className="w-10 h-10 object-cover" />
+              <button
+                onClick={() => setAttachedImage(null)}
+                className="absolute top-0 right-0 p-0.5 bg-black/80 rounded-full text-white"
+              >
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </div>
+            <span className="text-[10px] text-cyan-400 font-bold">Photo attached for vision analysis</span>
+          </div>
+        )}
+
+        {/* Compact Input Row */}
+        <div className="flex items-center gap-1.5 w-full bg-slate-100 dark:bg-[#070B14] border border-slate-200 dark:border-white/10 rounded-2xl px-2 py-1 focus-within:border-emerald-500 transition-colors">
+          
+          {/* Plus / Photo Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 transition-colors shrink-0"
+              title="Attach photo"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            {menuOpen && (
+              <div className="absolute bottom-10 left-0 z-50 bg-white dark:bg-[#131B2E] border border-slate-200 dark:border-white/10 rounded-2xl p-2 shadow-2xl space-y-1 w-48 animate-fade-in">
+                <button
+                  type="button"
+                  onClick={() => { fileInputRef.current?.click(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 p-2 rounded-xl text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Upload Photo</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { cameraInputRef.current?.click(); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-2 p-2 rounded-xl text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-left"
+                >
+                  <Camera className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Take Camera Photo</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
+          <input
+            type="file"
+            ref={cameraInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+          />
+
+          {/* Clean Single-Line Text Input */}
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder={currentPlaceholder}
+            className="flex-1 bg-transparent text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none py-1.5 min-w-0"
+          />
+
+          {/* Voice Typing Mic Button */}
+          <button
+            type="button"
+            onClick={toggleVoiceTyping}
+            className={`p-1.5 rounded-xl shrink-0 transition-colors ${
+              isListening 
+                ? 'bg-rose-500 text-white animate-pulse' 
+                : 'text-slate-400 hover:text-emerald-400'
+            }`}
+            title="Voice typing"
+          >
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+
+          {/* Send Button or 1-on-1 Voice Launcher */}
+          {inputText.trim() || attachedImage ? (
+            <button
+              type="button"
+              onClick={handleSend}
+              className="p-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white shrink-0 transition-transform active:scale-95 shadow-sm"
+              title="Send"
+            >
+              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+            </button>
+          ) : (
+            onOpenLiveVoice && (
+              <button
+                type="button"
+                onClick={onOpenLiveVoice}
+                className="p-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-400 shrink-0 transition-colors"
+                title="1-on-1 Voice Mode"
+              >
+                <Radio className="w-4 h-4" />
+              </button>
+            )
+          )}
+
+        </div>
       </div>
 
     </div>

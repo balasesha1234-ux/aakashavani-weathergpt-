@@ -633,7 +633,7 @@ export default function App() {
   // Dedicated Mobile Interface
   if (isMobileView) {
     return (
-      <div className={`w-full h-full min-h-screen overflow-hidden ${theme === 'light' ? 'light-theme bg-[#F5F7F3]' : 'bg-[#080C14]'}`}>
+      <div className={`fixed inset-0 w-full h-[100dvh] overflow-hidden flex flex-col ${theme === 'light' ? 'light-theme bg-[#F5F7F3]' : 'bg-[#080C14]'}`}>
         <PhoneSimulatorFrame
           theme={theme}
           onToggleTheme={() => setTheme(theme === 'light' ? 'dark' : 'light')}

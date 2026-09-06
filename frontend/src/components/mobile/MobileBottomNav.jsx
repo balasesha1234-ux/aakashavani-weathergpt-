@@ -40,7 +40,6 @@ export default function MobileBottomNav({
     { id: 'home', label: l.home, icon: Home },
     { id: 'chat', label: l.chat, icon: MessageSquare },
     { id: 'map', label: l.map, icon: Map },
-    { id: 'timeline', label: l.timeline, icon: History },
     { id: 'desk', label: l.desk, icon: Users },
     { 
       id: 'alerts', 
