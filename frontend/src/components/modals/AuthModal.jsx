@@ -124,8 +124,9 @@ export default function AuthModal({
   const initGoogleSignIn = () => {
     if (window.google?.accounts?.id && googleBtnRef.current) {
       try {
+        const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '1082697844081-dummyclientid.apps.googleusercontent.com';
         window.google.accounts.id.initialize({
-          client_id: '1082697844081-dummyclientid.apps.googleusercontent.com', // Replace with production client ID
+          client_id: googleClientId,
           callback: handleGoogleCredentialResponse,
           auto_select: false,
           cancel_on_tap_outside: true

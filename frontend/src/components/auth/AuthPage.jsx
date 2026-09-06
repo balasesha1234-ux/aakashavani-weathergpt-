@@ -279,16 +279,24 @@ export default function AuthPage({
 
   // Google Login
   const handleGoogleLogin = async () => {
-    setLoading(true);
     setErrorMsg(null);
+    let emailToUse = (email || '').trim();
+    if (!emailToUse || !emailToUse.includes('@')) {
+      const prompted = window.prompt('Enter your Gmail address to sign in with Google:', '');
+      if (!prompted || !prompted.includes('@')) {
+        setErrorMsg('Valid Gmail address is required to sign in with Google.');
+        return;
+      }
+      emailToUse = prompted.trim();
+    }
+    setLoading(true);
     try {
-      const emailToUse = email.includes('@') ? email : 'citizen.rajesh@gmail.com';
       const res = await loginWithGoogle({
         email: emailToUse,
-        name: fullName || 'Dr. Rajesh Sharma',
+        name: fullName || emailToUse.split('@')[0].replace('.', ' ').replace(/\b\w/g, c => c.toUpperCase()),
         picture: 'https://lh3.googleusercontent.com/a/default-avatar'
       });
-      setSuccessMsg('Google sign-in successful!');
+      setSuccessMsg(`Google sign-in successful for ${emailToUse}!`);
       setTimeout(() => {
         if (onLoginSuccess) {
           onLoginSuccess(res.user, res.token);
