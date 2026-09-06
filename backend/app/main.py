@@ -580,13 +580,19 @@ async def get_weather_forecast(lat: float = Query(20.7453), lon: float = Query(7
     }
 
 @app.get("/api/warnings")
-def get_all_warnings(db: Session = Depends(get_db)):
+def get_all_warnings(mode: str = Query("live"), db: Session = Depends(get_db)):
     """Returns all currently active verified weather warnings & hazard polygons."""
     now = datetime.now(timezone.utc)
     naive_now = datetime.now(timezone.utc).replace(tzinfo=None)
     warnings = db.query(Warning).filter((Warning.expires_at >= now) | (Warning.expires_at >= naive_now)).all()
-    return [
-        {
+    is_demo = (mode or "live").lower() in ["demo", "test", "benchmark", "simulation"]
+
+    results = []
+    for w in warnings:
+        is_sim = EmergencyService.is_simulated_warning(w)
+        if not is_demo and is_sim:
+            continue
+        results.append({
             "warning_id": w.warning_id,
             "hazard_type": w.hazard_type,
             "severity": w.severity,
@@ -596,10 +602,16 @@ def get_all_warnings(db: Session = Depends(get_db)):
             "issued_at": w.issued_at.isoformat() if w.issued_at else None,
             "expires_at": w.expires_at.isoformat() if w.expires_at else None,
             "affected_districts": w.warning_areas[0].affected_districts if w.warning_areas else "Regional",
-            "geofence": json.loads(w.warning_areas[0].geofence) if (w.warning_areas and w.warning_areas[0].geofence) else None
-        }
-        for w in warnings
-    ]
+            "geofence": json.loads(w.warning_areas[0].geofence) if (w.warning_areas and w.warning_areas[0].geofence) else None,
+            "is_simulated": is_sim,
+            "simulation_label": "DEMO / SIMULATED DATA" if is_sim else None,
+            "provenance": {
+                "source": f"{w.provider} (Scenario Benchmark)" if is_sim else (w.provider or "IMD / NDMA CAP Broadcast"),
+                "verified_at": w.issued_at.isoformat() if (w.issued_at and not is_sim) else now.isoformat(),
+                "status": "demo" if is_sim else "live"
+            }
+        })
+    return results
 
 @app.get("/api/weather/climate-anomaly")
 def get_climate_anomaly(district: str = Query("Wardha")):
@@ -683,10 +695,11 @@ def get_wis2_standard_notification(district: str = Query("Hyderabad")):
 def get_emergency_status(
     lat: float = Query(19.8135),
     lon: float = Query(85.8312),
-    district: Optional[str] = Query(None)
+    district: Optional[str] = Query(None),
+    mode: str = Query("live")
 ):
     """Evaluates if location is affected by active High/Critical disaster alerts."""
-    return EmergencyService.evaluate_emergency_status(lat, lon, district)
+    return EmergencyService.evaluate_emergency_status(lat, lon, district, mode=mode)
 
 @app.get("/api/emergency/resources")
 def get_emergency_resources(

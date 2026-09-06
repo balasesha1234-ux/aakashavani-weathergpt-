@@ -33,6 +33,7 @@ export default function AlertsView({
   latitude, 
   longitude, 
   district, 
+  appMode = 'live',
   onOpenSms, 
   onOpenIvr,
   onOpenPhase3,
@@ -54,10 +55,10 @@ export default function AlertsView({
   const fetchAlertsData = async () => {
     try {
       const [eStatus, resList, deltas, warns] = await Promise.all([
-        getEmergencyStatus(latitude, longitude, district),
+        getEmergencyStatus(latitude, longitude, district, appMode),
         getEmergencyResources(latitude, longitude, district),
         getEmergencyDelta('CYCLONE'),
-        getAllWarnings()
+        getAllWarnings(appMode)
       ]);
       setEmergencyStatus(eStatus);
       setResources(resList || []);
@@ -73,15 +74,21 @@ export default function AlertsView({
 
   useEffect(() => {
     fetchAlertsData();
-  }, [latitude, longitude, district]);
+  }, [latitude, longitude, district, appMode]);
 
   const handleRefresh = () => {
     setRefreshing(true);
     fetchAlertsData();
   };
 
-  const isCritical = emergencyStatus?.is_emergency_active;
-  const severity = emergencyStatus?.severity || 'NORMAL';
+  const isSimulated = Boolean(emergencyStatus?.warning?.is_simulated);
+  // In Live Mode, synthetic demo alerts MUST NEVER be treated as critical active alerts (Rule 1 & Rule 3)
+  const isCritical = (appMode === 'live' && isSimulated) 
+    ? false 
+    : Boolean(emergencyStatus?.is_emergency_active);
+  const severity = (appMode === 'live' && isSimulated) 
+    ? 'NORMAL' 
+    : (emergencyStatus?.severity || 'NORMAL');
 
   const filteredResources = activeCategory === 'ALL' 
     ? resources 
@@ -132,22 +139,36 @@ export default function AlertsView({
 
         {/* Primary Severity Hero Card */}
         {isCritical ? (
-          <div className="rounded-3xl p-6 sm:p-7 bg-gradient-to-br from-red-950/90 via-rose-950/70 to-[#0F080A] border-2 border-red-500/80 shadow-2xl shadow-red-950/60 relative overflow-hidden">
+          <div className={`rounded-3xl p-6 sm:p-7 ${
+            isSimulated 
+              ? 'bg-gradient-to-br from-amber-950/90 via-slate-900/90 to-[#0F080A] border-2 border-amber-500/70 shadow-2xl shadow-amber-950/40' 
+              : 'bg-gradient-to-br from-red-950/90 via-rose-950/70 to-[#0F080A] border-2 border-red-500/80 shadow-2xl shadow-red-950/60'
+          } relative overflow-hidden`}>
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black bg-red-600 text-white tracking-widest uppercase">
-                  🔴 IMD RED ALERT IN EFFECT
+                {isSimulated && (
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-amber-500/25 border border-amber-500/60 text-amber-300 text-xs font-black uppercase tracking-wider mb-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>DEMO / SIMULATED DATA — Active Disaster Simulation Benchmark</span>
+                  </div>
+                )}
+                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-black ${
+                  isSimulated ? 'bg-amber-500 text-slate-950' : 'bg-red-600 text-white'
+                } tracking-widest uppercase`}>
+                  {isSimulated ? '⚠️ DEMO / SIMULATED DATA' : '🔴 OFFICIAL IMD RED ALERT IN EFFECT'}
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-white">
-                  {emergencyStatus?.warning?.headline || 'Severe Cyclonic Storm Landfall Imminent'}
+                  {emergencyStatus?.warning?.headline || (isSimulated ? `Simulated Severe Disaster Scenario (${district})` : 'Severe Alert Imminent')}
                 </h2>
                 <p className="text-sm sm:text-base text-red-200 leading-relaxed max-w-3xl">
                   {emergencyStatus?.warning?.instructions || 'Immediate evacuation ordered for all low-lying coastal villages. Move to pucca cyclone relief shelters. Keep battery torches, water, and dry rations.'}
                 </p>
-                <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-red-300">
+                <div className="pt-2 flex flex-wrap items-center gap-3 text-xs text-slate-300">
                   <span>Target District: <strong className="text-white">{district}</strong></span>
                   <span>•</span>
-                  <span>Issued By: <strong className="text-white">{emergencyStatus?.warning?.provider || 'IMD_CAP'}</strong></span>
+                  <span>Source: <strong className="text-white">{emergencyStatus?.warning?.provenance?.source || emergencyStatus?.warning?.provider || 'IMD_CAP'}</strong></span>
+                  <span>•</span>
+                  <span>Status: <strong className={isSimulated ? "text-amber-300" : "text-red-400"}>{isSimulated ? 'DEMO / SIMULATION' : 'LIVE VERIFIED'}</strong></span>
                 </div>
               </div>
 
@@ -176,16 +197,22 @@ export default function AlertsView({
                 <ShieldCheck className="w-7 h-7" />
               </div>
               <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 uppercase tracking-wide mb-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Live Telemetry: All Clear</span>
+                </div>
                 <h3 className="text-lg font-bold text-white">
-                  No Active Life-Threatening Emergency for {district}
+                  No active verified warning for your area ({district || 'Detected Area'}).
                 </h3>
                 <p className="text-sm text-slate-300 max-w-2xl">
-                  Surface telemetry and radar scans indicate safe atmospheric conditions. Standard weather advisories and agricultural monitoring remain active.
+                  Surface telemetry and Doppler Radar scans indicate safe atmospheric conditions. Standard weather monitoring remains active.
                 </p>
                 <div className="pt-2 text-xs text-slate-400 flex items-center gap-2">
-                  <span>Geofence Evaluation: <strong className="text-emerald-400">PASSED (0km radius clear)</strong></span>
+                  <span>Status: <strong className="text-emerald-400">VERIFIED ALL-CLEAR</strong></span>
                   <span>•</span>
-                  <span>Telemetry: <strong className="text-slate-300">Open-Meteo & IMD CAP</strong></span>
+                  <span>Source: <strong className="text-slate-300">IMD CAP & Open-Meteo Telemetry</strong></span>
+                  <span>•</span>
+                  <span>Geofence: <strong className="text-emerald-400">PASSED</strong></span>
                 </div>
                 <div className="pt-3 flex flex-wrap gap-2">
                   <a

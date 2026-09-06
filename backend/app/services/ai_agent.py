@@ -1345,6 +1345,39 @@ class UniversalConversationalReasoner:
                 "distance_km": 2.8
             }
 
+            is_emer = bool(emergency and emergency.get("is_emergency_active"))
+
+            if not is_emer:
+                if lang in ["hi", "hinglish"]:
+                    resp = (
+                        f"✅ **मौसम व जलस्तर स्थिति ({target_dist.upper()}): सामान्य (All Clear)**\n\n"
+                        f"आधिकारिक IMD / NDMA टेलीमेट्री और जल आयोग (CWC) के अनुसार **{target_dist} में वर्तमान में कोई सक्रिय बाढ़ या आपदा चेतावनी नहीं है।**\n\n"
+                        f"• **वर्तमान वर्षा:** {rain} mm (सामान्य सुरक्षित सीमा)\n"
+                        f"• **मौसम स्थिति:** {condition} ({temp}°C)\n"
+                        f"• **आपदा स्थिति:** सामान्य / कोई खतरा नहीं\n\n"
+                        f"आप अपनी सामान्य दिनचर्या जारी रख सकते हैं। आपातकालीन पूछताछ के लिए जिला नियंत्रण कक्ष **`1077`** या राष्ट्रीय हेल्पलाइन **`112`** उपलब्ध है।"
+                    )
+                elif lang in ["te", "telish"]:
+                    resp = (
+                        f"✅ **వాతావరణ & వరద స్థితి ({target_dist.upper()}): సాధారణం (All Clear)**\n\n"
+                        f"అధికారిక IMD / NDMA టెలిమెట్రీ ప్రకారం **{target_dist} లో ప్రస్తుతానికి ఎలాంటి వరద హెచ్చరిక లేదా విపత్తు అలర్ట్ లేదు.**\n\n"
+                        f"• **వర్షపాతం:** {rain} mm (సురక్షిత పరిమితి)\n"
+                        f"• **వాతావరణం:** {condition}, {temp}°C\n"
+                        f"• **విపత్తు స్థితి:** ఆల్ క్లియర్ / సాధారణం\n\n"
+                        f"మీ రోజువారీ కార్యకలాపాలు సాధారణంగా కొనసాగించవచ్చు. అత్యవసర విచారణల కోసం **`1077`** లేదా **`112`** కి సంప్రదించండి."
+                    )
+                else:
+                    resp = (
+                        f"✅ **Verified Weather & Flood Status ({target_dist.upper()}): ALL CLEAR (Normal)**\n\n"
+                        f"Official IMD / NDMA Common Alerting Protocol (CAP) and Central Water Commission (CWC) telemetry confirm: "
+                        f"**There is NO active flood, cyclone, or severe disaster alert in effect for {target_dist}.**\n\n"
+                        f"• **Current Rainfall:** **{rain} mm** (Nominal safe threshold)\n"
+                        f"• **Surface Condition:** **{condition}** at **{temp}°C**\n"
+                        f"• **Disaster Telemetry Status:** Verified All-Clear / Normal Operations\n\n"
+                        f"No evacuation directives are in effect. For civic inquiries or general assistance, contact the District Disaster Control Room at **`1077`** or National Emergency Services at **`112`**."
+                    )
+                return resp, "DISASTER_QUERY", 0.99
+
             resp = (
                 f"🚨 **CRITICAL DISASTER ALERT: FLASH FLOOD & WATER LEVEL RISING ({target_dist.upper()})**\n\n"
                 f"River telemetry and drainage sensors indicate rapid water accumulation and dangerous water level rising. "
@@ -1968,22 +2001,17 @@ class AakashaVaniAgent:
         if "emergency_resource_tool" in tool_results and tool_results["emergency_resource_tool"].success:
             emergency_status["emergency_resources"] = tool_results["emergency_resource_tool"].data
 
-        # Guarantee emergency payload structure when active or requested
-        if plan.intent == "DISASTER_EMERGENCY" or emergency_status.get("is_emergency_active"):
-            emergency_status["is_emergency_active"] = True
-            if emergency_status.get("severity") in ["NORMAL", None]:
-                emergency_status["severity"] = "RED"
-            if not emergency_status.get("warning"):
-                emergency_status["warning"] = {
-                    "warning_id": f"warn-flood-{int(time.time())}",
-                    "hazard_type": "FLASH_FLOOD",
-                    "severity": "RED",
-                    "instructions": f"CRITICAL FLASH FLOOD ALERT: Rapid water accumulation and river level rising in {target_district}. Evacuate immediately to designated relief shelters on higher ground. Switch off main electricity supply and gas.",
-                    "provider": "GHMC_DISASTER_MANAGEMENT_AUTHORITY",
-                    "issued_at": datetime.now(timezone.utc).isoformat(),
-                    "expires_at": (datetime.now(timezone.utc) + timedelta(days=2)).isoformat(),
-                    "affected_districts": target_district
-                }
+        # Ensure emergency payload preserves authentic status and never invents synthetic warnings in Live Mode
+        if emergency_status.get("is_emergency_active"):
+            if not emergency_status.get("emergency_resources"):
+                emergency_status["emergency_resources"] = EmergencyService.get_nearby_verified_resources(target_lat, target_lon, None, target_district)
+        else:
+            # When no verified emergency is active, guarantee clean normal status (Rule 1 & Rule 5)
+            emergency_status["is_emergency_active"] = False
+            emergency_status["severity"] = "NORMAL"
+            emergency_status["ui_mode"] = "NORMAL_WEATHER_MODE"
+            emergency_status["display_banner"] = False
+            emergency_status["warning"] = None
             if not emergency_status.get("emergency_resources"):
                 emergency_status["emergency_resources"] = EmergencyService.get_nearby_verified_resources(target_lat, target_lon, None, target_district)
 

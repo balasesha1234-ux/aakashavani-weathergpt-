@@ -6,8 +6,31 @@ from ..models import Warning, WarningArea, EmergencyResource, Location
 
 class EmergencyService:
     @staticmethod
-    def evaluate_emergency_status(lat: float, lon: float, district: Optional[str] = None) -> Dict[str, Any]:
-        """Evaluates whether the given location is impacted by active High/Critical disaster alerts."""
+    def is_simulated_warning(w: Optional[Warning]) -> bool:
+        """Determines if a warning record is a pre-packaged simulation/benchmark fixture."""
+        if not w:
+            return False
+        wid = (w.warning_id or "").lower()
+        prov = (w.provider or "").lower()
+        if any(k in wid for k in ["sim", "test", "benchmark", "puri-01", "wardha-01", "hyd-01", "flood-hyd"]):
+            return True
+        if any(k in prov for k in ["simulat", "test", "benchmark", "ghmc_disaster_management_telangana"]):
+            return True
+        return False
+
+    @staticmethod
+    def evaluate_emergency_status(
+        lat: float, 
+        lon: float, 
+        district: Optional[str] = None, 
+        mode: str = "live"
+    ) -> Dict[str, Any]:
+        """
+        Evaluates whether the given location is impacted by active High/Critical disaster alerts.
+        In Live Mode ('live'), ONLY authentic verified alerts are returned; synthetic demo benchmarks
+        are ignored so that production users never see simulated alerts as real emergencies.
+        In Demo Mode ('demo'), benchmark scenarios are returned with explicit simulation labeling.
+        """
         db = SessionLocal()
         try:
             # Query active warnings
@@ -16,13 +39,21 @@ class EmergencyService:
             naive_now = datetime.now(timezone.utc).replace(tzinfo=None)
             warnings = db.query(Warning).filter((Warning.expires_at >= now) | (Warning.expires_at >= naive_now)).all()
 
+            is_demo_mode = (mode or "live").lower() in ["demo", "test", "benchmark", "simulation"]
+
+            # Filter candidates: In Live Mode, completely exclude simulated/test benchmarks
+            candidate_warnings = [
+                w for w in warnings 
+                if is_demo_mode or not EmergencyService.is_simulated_warning(w)
+            ]
+
             matched_warning = None
             matched_area = None
 
-            # Pass 1: Strict district match across all active disaster warnings
+            # Pass 1: Strict district match across candidate disaster warnings
             if district:
                 dist_lower = district.lower().strip()
-                for w in warnings:
+                for w in candidate_warnings:
                     if w.warning_areas:
                         for wa in w.warning_areas:
                             if dist_lower in wa.affected_districts.lower() or dist_lower in w.instructions.lower():
@@ -34,7 +65,7 @@ class EmergencyService:
 
             # Pass 2: Geodesic coordinate proximity check (within 75km) if no direct district match
             if not matched_warning:
-                for w in warnings:
+                for w in candidate_warnings:
                     if w.location and w.location.latitude and w.location.longitude:
                         try:
                             dist_km = geodesic((lat, lon), (float(w.location.latitude), float(w.location.longitude))).km
@@ -45,16 +76,24 @@ class EmergencyService:
                         except Exception:
                             pass
 
+            target_dist_label = district.title() if district else "District"
+
             if not matched_warning:
                 # Always provide localized verified emergency facilities even in normal weather mode
                 resources = EmergencyService.get_nearby_verified_resources(lat, lon, None, district)
-                target_dist_label = district.title() if district else "District"
                 return {
                     "is_emergency_active": False,
                     "severity": "NORMAL",
                     "ui_mode": "NORMAL_WEATHER_MODE",
                     "display_banner": False,
                     "warning": None,
+                    "status_message": f"No active verified warning for {target_dist_label}.",
+                    "provenance": {
+                        "source": "IMD / NDMA Common Alerting Protocol (CAP)",
+                        "verified_at": now.isoformat(),
+                        "status": "live",
+                        "notice": f"No active verified warning for {target_dist_label}."
+                    },
                     "what_changed": [],
                     "emergency_resources": resources,
                     "official_helplines": [
@@ -69,6 +108,7 @@ class EmergencyService:
             # Determine severity level and mode
             severity = matched_warning.severity.upper()
             is_critical = severity in ["RED", "ORANGE"]
+            is_sim = EmergencyService.is_simulated_warning(matched_warning)
 
             # Fetch verified resources
             resources = EmergencyService.get_nearby_verified_resources(lat, lon, matched_area.warning_area_id if matched_area else None, district)
@@ -76,23 +116,34 @@ class EmergencyService:
             # Generate "What's Changed?" Situational Delta
             deltas = EmergencyService.generate_whats_changed_delta(matched_warning.hazard_type)
 
-            target_dist_label = district.title() if district else "District"
+            warning_payload = {
+                "warning_id": matched_warning.warning_id,
+                "hazard_type": matched_warning.hazard_type,
+                "severity": matched_warning.severity,
+                "instructions": matched_warning.instructions,
+                "provider": matched_warning.provider,
+                "issued_at": matched_warning.issued_at.isoformat() if matched_warning.issued_at else now.isoformat(),
+                "expires_at": matched_warning.expires_at.isoformat() if matched_warning.expires_at else None,
+                "affected_districts": matched_area.affected_districts if matched_area else target_dist_label,
+                "geofence": matched_area.geofence if matched_area else None,
+                "is_simulated": is_sim,
+                "simulation_label": "DEMO / SIMULATED DATA" if is_sim else None,
+                "provenance": {
+                    "source": f"{matched_warning.provider} (Scenario Benchmark)" if is_sim else (matched_warning.provider or "IMD / NDMA CAP Telemetry Feed"),
+                    "verified_at": matched_warning.issued_at.isoformat() if (matched_warning.issued_at and not is_sim) else now.isoformat(),
+                    "status": "demo" if is_sim else "live",
+                    "notice": "DEMO / SIMULATED DATA — Active Disaster Simulation Benchmark" if is_sim else "Official Verified Disaster Warning"
+                }
+            }
+
             return {
                 "is_emergency_active": is_critical,
                 "severity": severity,
                 "ui_mode": "ADAPTIVE_EMERGENCY_MODE" if is_critical else "STANDARD_WARNING_BANNER",
                 "display_banner": True,
-                "warning": {
-                    "warning_id": matched_warning.warning_id,
-                    "hazard_type": matched_warning.hazard_type,
-                    "severity": matched_warning.severity,
-                    "instructions": matched_warning.instructions,
-                    "provider": matched_warning.provider,
-                    "issued_at": matched_warning.issued_at.isoformat(),
-                    "expires_at": matched_warning.expires_at.isoformat(),
-                    "affected_districts": matched_area.affected_districts if matched_area else target_dist_label,
-                    "geofence": matched_area.geofence if matched_area else None
-                },
+                "warning": warning_payload,
+                "status_message": f"Active {severity} Warning: {matched_warning.hazard_type}" if not is_sim else f"[DEMO] {severity} Benchmark: {matched_warning.hazard_type}",
+                "provenance": warning_payload["provenance"],
                 "what_changed": deltas,
                 "emergency_resources": resources,
                 "official_helplines": [

@@ -300,14 +300,19 @@ export default function App() {
 
   // Check emergency status
   useEffect(() => {
-    getEmergencyStatus(latitude, longitude, activeDistrict).then((emer) => {
+    getEmergencyStatus(latitude, longitude, activeDistrict, appMode).then((emer) => {
       setEmergencyData(emer);
-      setIsEmergencyActive(Boolean(emer?.is_emergency_active));
+      // In Live Mode, synthetic demo alerts MUST NEVER activate emergency mode (Rule 1 & Rule 3)
+      if (appMode === 'live' && emer?.warning?.is_simulated) {
+        setIsEmergencyActive(false);
+      } else {
+        setIsEmergencyActive(Boolean(emer?.is_emergency_active));
+      }
     }).catch(() => {
       setEmergencyData(null);
       setIsEmergencyActive(false);
     });
-  }, [latitude, longitude, activeDistrict]);
+  }, [latitude, longitude, activeDistrict, appMode]);
 
   const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0];
   const currentMessages = activeConversation?.messages || [];
@@ -354,23 +359,38 @@ export default function App() {
       if (scenarioOrQuery.title) {
         simTitle = scenarioOrQuery.title;
       }
-      // If Cyclone or Flood simulation, trigger emergency status immediately
+      // If explicit benchmark simulation scenario is selected (Puri Cyclone / Hyderabad Flood)
       if (
         scenarioOrQuery.id === 'scenario_cyclone_puri' || 
-        scenarioOrQuery.id === 'scenario_flood_hyderabad' || 
-        scenarioOrQuery.district === 'Puri' || 
-        scenarioOrQuery.district === 'Hyderabad'
+        scenarioOrQuery.id === 'scenario_flood_hyderabad' ||
+        Boolean(scenarioOrQuery.isSimulation)
       ) {
+        setAppMode('demo');
+        localStorage.setItem('aakashavani_app_mode', 'demo');
         getEmergencyStatus(
-          scenarioOrQuery.latitude || (scenarioOrQuery.district === 'Hyderabad' ? 17.3850 : 19.8135), 
-          scenarioOrQuery.longitude || (scenarioOrQuery.district === 'Hyderabad' ? 78.4867 : 85.8312), 
-          scenarioOrQuery.district || 'Hyderabad'
+          scenarioOrQuery.latitude || 19.8135, 
+          scenarioOrQuery.longitude || 85.8312, 
+          scenarioOrQuery.district || 'Puri',
+          'demo'
         ).then((emer) => {
           setEmergencyData(emer);
-          setIsEmergencyActive(true);
+          setIsEmergencyActive(Boolean(emer?.is_emergency_active));
         }).catch(() => {});
       } else {
-        setIsEmergencyActive(false);
+        // Standard location query: evaluate cleanly in current mode
+        getEmergencyStatus(
+          scenarioOrQuery.latitude || latitude,
+          scenarioOrQuery.longitude || longitude,
+          scenarioOrQuery.district || activeDistrict,
+          appMode
+        ).then((emer) => {
+          setEmergencyData(emer);
+          if (appMode === 'live' && emer?.warning?.is_simulated) {
+            setIsEmergencyActive(false);
+          } else {
+            setIsEmergencyActive(Boolean(emer?.is_emergency_active));
+          }
+        }).catch(() => {});
       }
     }
 
@@ -522,7 +542,17 @@ export default function App() {
           setLongitude(res.weather.longitude);
         }
       }
-      setIsEmergencyActive(Boolean(res.emergency?.is_emergency_active));
+
+      const isEmer = Boolean(res.emergency?.is_emergency_active);
+      const isSim = Boolean(res.emergency?.warning?.is_simulated);
+      if (appMode === 'live' && isSim) {
+        setIsEmergencyActive(false);
+      } else {
+        setIsEmergencyActive(isEmer);
+      }
+      if (res.emergency) {
+        setEmergencyData(res.emergency);
+      }
       return res;
 
     } catch (err) {
@@ -660,8 +690,8 @@ export default function App() {
         activeDistrict={activeDistrict}
         onSelectScenario={handleSelectScenario}
         activeWorkspace={activeWorkspace}
-        setActiveWorkspace={setActiveWorkspace}
         isEmergencyActive={isEmergencyActive}
+        emergencyData={emergencyData}
         currentLang={currentLang}
         onSelectLang={setCurrentLang}
         onOpenSms={() => setSmsModalOpen(true)}
@@ -788,6 +818,7 @@ export default function App() {
             latitude={latitude}
             longitude={longitude}
             district={activeDistrict}
+            appMode={appMode}
             onOpenSms={() => setSmsModalOpen(true)}
             onOpenIvr={() => setIvrModalOpen(true)}
             onOpenPhase3={() => setPhase3ModalOpen(true)}

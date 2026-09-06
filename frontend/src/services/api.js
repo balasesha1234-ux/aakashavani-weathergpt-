@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.port === '5173' ? 'http://localhost:8000' : '');
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.port === '5173' ? 'http://localhost:8000' : 'https://aakashavani-weathergpt.onrender.com');
 
 export async function sendChatMessage({ query, latitude, longitude, district, language = 'en', role = 'farmer', image_data = null, allow_training = true }) {
   try {
@@ -35,9 +35,9 @@ export async function getWeatherForecast(lat = 20.7453, lon = 78.6022) {
   }
 }
 
-export async function getAllWarnings() {
+export async function getAllWarnings(mode = 'live') {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/warnings`);
+    const res = await fetch(`${API_BASE_URL}/api/warnings?mode=${encodeURIComponent(mode)}`);
     return await res.json();
   } catch (err) {
     console.error('Warnings API Error:', err);
@@ -45,11 +45,14 @@ export async function getAllWarnings() {
   }
 }
 
-export async function getEmergencyStatus(lat, lon, district) {
+export async function getEmergencyStatus(lat, lon, district, mode = 'live') {
   try {
-    const url = district 
-      ? `${API_BASE_URL}/api/emergency/status?district=${encodeURIComponent(district)}`
-      : `${API_BASE_URL}/api/emergency/status?lat=${lat}&lon=${lon}`;
+    const params = new URLSearchParams();
+    if (lat != null) params.set('lat', lat);
+    if (lon != null) params.set('lon', lon);
+    if (district) params.set('district', district);
+    if (mode) params.set('mode', mode);
+    const url = `${API_BASE_URL}/api/emergency/status?${params.toString()}`;
     const res = await fetch(url);
     return await res.json();
   } catch (err) {

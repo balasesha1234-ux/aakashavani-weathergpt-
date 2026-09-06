@@ -22,7 +22,8 @@ import {
   MoreHorizontal,
   MapPin,
   Activity,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -38,6 +39,7 @@ export default function Sidebar({
   setActiveWorkspace,
   userProfile,
   isEmergencyActive,
+  emergencyData = null,
   activeDistrict = "Manikonda",
   onSelectScenario,
   currentLang = 'telish',
@@ -212,21 +214,54 @@ export default function Sidebar({
           </div>
         </div>
 
-        {/* Active Emergency Alert Banner */}
-        {isEmergencyActive && (
-          <div 
-            onClick={() => {
-              setActiveWorkspace('alerts');
-              if (window.innerWidth < 1024) setIsOpen(false);
-            }}
-            className="p-3 mx-3 my-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-400 flex items-center gap-2.5 text-xs animate-emergency-pulse cursor-pointer hover:bg-rose-500/25 transition-all"
-          >
-            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 animate-bounce" />
-            <div className="flex-1 min-w-0">
-              <p className="font-bold truncate text-[11px]">Active Red Alert</p>
-              <p className="text-[10px] text-rose-300 truncate">{activeDistrict} Zone</p>
+        {/* Active Emergency Alert Banner (Live Mode vs Demo Simulation) */}
+        {isEmergencyActive && emergencyData?.warning && (
+          appMode === 'live' ? (
+            // Live Mode: Only show genuine verified alerts (Rule 1: no synthetic warnings)
+            !emergencyData.warning.is_simulated && (
+              <div 
+                onClick={() => {
+                  setActiveWorkspace('alerts');
+                  if (window.innerWidth < 1024) setIsOpen(false);
+                }}
+                className="p-3 mx-3 my-2 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-400 flex items-center gap-2.5 text-xs animate-emergency-pulse cursor-pointer hover:bg-rose-500/25 transition-all"
+              >
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 animate-bounce" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                    <span className="text-[9px] font-black uppercase text-rose-300 tracking-wider">OFFICIAL IMD ALERT</span>
+                  </div>
+                  <p className="font-bold truncate text-[11px] text-rose-200">
+                    {emergencyData.warning.severity || 'RED'} Alert: {emergencyData.warning.hazard_type || 'Disaster'}
+                  </p>
+                  <p className="text-[10px] text-rose-300/80 truncate">{activeDistrict} Zone</p>
+                </div>
+              </div>
+            )
+          ) : (
+            // Demo Mode: Explicitly labeled benchmark simulation (Rule 2)
+            <div 
+              onClick={() => {
+                setActiveWorkspace('alerts');
+                if (window.innerWidth < 1024) setIsOpen(false);
+              }}
+              className="p-3 mx-3 my-2 rounded-2xl bg-amber-500/15 border border-amber-500/50 text-amber-300 flex items-center gap-2.5 text-xs cursor-pointer hover:bg-amber-500/25 transition-all"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="px-1.5 py-0.2 rounded bg-amber-500/30 text-amber-300 text-[8px] font-black uppercase tracking-wider border border-amber-500/50">
+                    DEMO / SIMULATED DATA
+                  </span>
+                </div>
+                <p className="font-bold truncate text-[11px] text-amber-200">
+                  {emergencyData.warning.severity || 'TEST'} Alert: {emergencyData.warning.hazard_type || 'Simulation'}
+                </p>
+                <p className="text-[10px] text-amber-300/80 truncate">{activeDistrict} Benchmark Drill</p>
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {/* Mode Switcher Banner: Live Production vs Test Benchmarks */}

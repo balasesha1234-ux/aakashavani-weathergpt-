@@ -338,11 +338,13 @@ class WarningTool(BaseTool):
         lat = kwargs.get("latitude") or kwargs.get("lat") or 20.7453
         lon = kwargs.get("longitude") or kwargs.get("lon") or 78.6022
         dist = kwargs.get("district", "Wardha")
+        mode = kwargs.get("mode", "live")
 
         try:
-            status = EmergencyService.evaluate_emergency_status(lat, lon, dist)
+            status = EmergencyService.evaluate_emergency_status(lat, lon, dist, mode=mode)
             elapsed = int((time.time() - t0) * 1000)
             warning_data = status.get("warning")
+            prov = status.get("provenance", {})
             return ToolResult(
                 tool_name=self.name,
                 success=True,
@@ -350,12 +352,15 @@ class WarningTool(BaseTool):
                     "is_emergency_active": status.get("is_emergency_active", False),
                     "severity": status.get("severity", "NORMAL"),
                     "hazard_type": warning_data.get("hazard_type") if warning_data else None,
-                    "instructions": warning_data.get("instructions") if warning_data else "No active disaster directives.",
+                    "instructions": warning_data.get("instructions") if warning_data else (status.get("status_message") or "No active verified warning for your area."),
                     "provider": warning_data.get("provider") if warning_data else "IMD_CAP_ALERT_FEED",
-                    "affected_districts": warning_data.get("affected_districts") if warning_data else dist
+                    "affected_districts": warning_data.get("affected_districts") if warning_data else dist,
+                    "is_simulated": warning_data.get("is_simulated", False) if warning_data else False,
+                    "simulation_label": warning_data.get("simulation_label") if warning_data else None,
+                    "provenance": prov
                 },
                 latency_ms=elapsed,
-                provenance="NDMA / IMD Common Alerting Protocol (CAP) Broadcast"
+                provenance=prov.get("source", "NDMA / IMD Common Alerting Protocol (CAP) Broadcast")
             )
         except Exception as e:
             elapsed = int((time.time() - t0) * 1000)
