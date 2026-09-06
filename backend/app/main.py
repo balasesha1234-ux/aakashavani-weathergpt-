@@ -30,6 +30,7 @@ from .services.emergency_service import EmergencyService
 from .services.rules_engine import RulesEngine
 from .services.ai_agent import WeatherGPTAgent
 from .services.auth_service import AuthService
+from .services.cache_service import cache_service
 from .models import User, OAuthAccount, Location, Warning, WarningArea, EmergencyResource, WeatherObservation, ResponseTrace, Feedback, DataSource, OTPVerification
 from .middleware import SecurityHeadersMiddleware, RateLimiterMiddleware, sanitize_string, validate_coordinates
 
@@ -185,6 +186,7 @@ def record_chat_for_self_learning(query: str, response_text: str, language: str)
 
 @app.get("/api")
 @app.get("/api/status")
+@app.get("/api/health")
 def root():
     return {
         "status": "online",
@@ -207,6 +209,11 @@ def root():
 def get_database_health():
     """Enterprise Database Health, WAL Mode, and Pool Telemetry Probe."""
     return verify_db_health()
+
+@app.get("/api/health/cache")
+async def get_cache_health():
+    """Distributed Redis / In-Memory Cache Telemetry Probe."""
+    return await cache_service.health_check()
 
 # ============================================================================
 # ENTERPRISE CITIZEN & STAKEHOLDER AUTHENTICATION SUBSYSTEM (PHONE OTP & GOOGLE)
