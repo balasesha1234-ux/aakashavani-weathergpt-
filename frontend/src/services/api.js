@@ -751,6 +751,28 @@ export async function loginWithApple({ identityToken, email, name }) {
   return data;
 }
 
+export async function getGoogleAuthorizeUrl(redirectTo = '/auth/callback') {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/google/authorize?redirect_to=${encodeURIComponent(redirectTo)}&json_mode=true`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.error || 'Failed to initialize Google login');
+  return data.url;
+}
+
+export async function getAppleAuthorizeUrl(redirectTo = '/auth/callback') {
+  const res = await fetch(`${API_BASE_URL}/api/v1/auth/apple/authorize?redirect_to=${encodeURIComponent(redirectTo)}&json_mode=true`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || data.error || 'Failed to initialize Apple login');
+  return data.url;
+}
+
+export function startGoogleOAuth(redirectTo = '/auth/callback') {
+  window.location.href = `${API_BASE_URL}/api/v1/auth/google/authorize?redirect_to=${encodeURIComponent(redirectTo)}`;
+}
+
+export function startAppleOAuth(redirectTo = '/auth/callback') {
+  window.location.href = `${API_BASE_URL}/api/v1/auth/apple/authorize?redirect_to=${encodeURIComponent(redirectTo)}`;
+}
+
 export async function getCurrentUser(token) {
   if (!token) return null;
   try {

@@ -33,7 +33,12 @@ import {
   registerUser, 
   sendPhoneOtp, 
   verifyPhoneOtp, 
-  loginWithGoogle 
+  loginWithGoogle,
+  loginWithApple,
+  getGoogleAuthorizeUrl,
+  getAppleAuthorizeUrl,
+  startGoogleOAuth,
+  startAppleOAuth
 } from '../../services/api';
 
 export default function AuthPage({ 
@@ -277,19 +282,30 @@ export default function AuthPage({
     }
   };
 
-  // Google Login
+  // Google OAuth flow initiation with smart fallback
   const handleGoogleLogin = async () => {
     setErrorMsg(null);
+    setLoading(true);
+    try {
+      const authUrl = await getGoogleAuthorizeUrl('/auth/callback');
+      if (authUrl) {
+        window.location.href = authUrl;
+        return;
+      }
+    } catch (e) {
+      console.log('Google OAuth server redirect fallback:', e.message);
+    }
+
+    // Direct fallback for local dev or unconfigured server secrets
     let emailToUse = (email || '').trim();
     if (!emailToUse || !emailToUse.includes('@')) {
-      const prompted = window.prompt('Enter your Gmail address to sign in with Google:', '');
+      const prompted = window.prompt('Google OAuth credentials not configured on server. Enter your Gmail address directly:', '');
       if (!prompted || !prompted.includes('@')) {
-        setErrorMsg('Valid Gmail address is required to sign in with Google.');
+        setLoading(false);
         return;
       }
       emailToUse = prompted.trim();
     }
-    setLoading(true);
     try {
       const res = await loginWithGoogle({
         email: emailToUse,
@@ -298,12 +314,50 @@ export default function AuthPage({
       });
       setSuccessMsg(`Google sign-in successful for ${emailToUse}!`);
       setTimeout(() => {
-        if (onLoginSuccess) {
-          onLoginSuccess(res.user, res.token);
-        }
+        if (onLoginSuccess) onLoginSuccess(res.user, res.token);
       }, 500);
     } catch (err) {
       setErrorMsg(err.message || 'Google login failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Apple OAuth flow initiation with smart fallback
+  const handleAppleLogin = async () => {
+    setErrorMsg(null);
+    setLoading(true);
+    try {
+      const authUrl = await getAppleAuthorizeUrl('/auth/callback');
+      if (authUrl) {
+        window.location.href = authUrl;
+        return;
+      }
+    } catch (e) {
+      console.log('Apple OAuth server redirect fallback:', e.message);
+    }
+
+    // Direct fallback for local dev or unconfigured server secrets
+    let emailToUse = (email || '').trim();
+    if (!emailToUse || !emailToUse.includes('@')) {
+      const prompted = window.prompt('Apple OAuth credentials not configured on server. Enter your Apple ID email directly:', 'citizen@icloud.com');
+      if (!prompted || !prompted.includes('@')) {
+        setLoading(false);
+        return;
+      }
+      emailToUse = prompted.trim();
+    }
+    try {
+      const res = await loginWithApple({
+        email: emailToUse,
+        name: fullName || 'Apple User'
+      });
+      setSuccessMsg(`Apple sign-in successful for ${emailToUse}!`);
+      setTimeout(() => {
+        if (onLoginSuccess) onLoginSuccess(res.user, res.token);
+      }, 500);
+    } catch (err) {
+      setErrorMsg(err.message || 'Apple login failed.');
     } finally {
       setLoading(false);
     }
@@ -1026,25 +1080,45 @@ export default function AuthPage({
               </span>
             </div>
 
-            {/* Continue with Google Button (Matches Image 1, 2, 3) */}
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className={`w-full py-2.5 px-4 rounded-2xl border flex items-center justify-center gap-3 text-xs font-bold transition-all cursor-pointer shadow-sm hover:scale-[1.01] ${
-                isDark 
-                  ? 'border-slate-700 bg-slate-900/90 text-white hover:bg-slate-800' 
-                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-              </svg>
-              <span>Continue with Google</span>
-            </button>
+            {/* Social Logins Group */}
+            <div className="space-y-2.5">
+              {/* Continue with Google Button (Matches Image 1, 2, 3) */}
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className={`w-full py-2.5 px-4 rounded-2xl border flex items-center justify-center gap-3 text-xs font-bold transition-all cursor-pointer shadow-sm hover:scale-[1.01] ${
+                  isDark 
+                    ? 'border-slate-700 bg-slate-900/90 text-white hover:bg-slate-800' 
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                <span>Continue with Google</span>
+              </button>
+
+              {/* Continue with Apple Button */}
+              <button
+                type="button"
+                onClick={handleAppleLogin}
+                disabled={loading}
+                className={`w-full py-2.5 px-4 rounded-2xl border flex items-center justify-center gap-3 text-xs font-bold transition-all cursor-pointer shadow-sm hover:scale-[1.01] ${
+                  isDark 
+                    ? 'border-slate-700 bg-black text-white hover:bg-slate-900' 
+                    : 'border-slate-800 bg-black text-white hover:bg-slate-900'
+                }`}
+              >
+                <svg className="w-4 h-4 fill-current" viewBox="0 0 170 170">
+                  <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.67-7.81-11.96-14.34-6.41-9.79-11.35-20.73-14.82-32.83-3.47-12.1-5.21-23.36-5.21-33.78 0-14.34 3.73-26.07 11.19-35.19 7.46-9.12 16.71-13.78 27.75-13.99 4.13 0 9.07 1.15 14.82 3.44 5.75 2.29 9.38 3.44 10.9 3.44 1.3 0 5.16-1.26 11.58-3.79 6.42-2.52 11.83-3.63 16.23-3.32 12.39.63 22.39 5.27 30 13.91-10.87 6.63-16.19 15.54-15.97 26.74.22 8.79 3.69 16.17 10.42 22.14 6.73 5.97 14.65 9.4 23.77 10.3-2.17 6.41-4.78 12.82-7.83 19.23zM119.22 33.64c0-7.39 2.67-14.44 8.01-21.15 5.34-6.71 12.01-11.21 20.01-13.49.22 1.3.33 2.49.33 3.58 0 7.39-2.83 14.44-8.49 21.15-5.66 6.71-12.44 11.02-20.35 12.92-.32-1.09-.51-2.09-.51-3.01z" />
+                </svg>
+                <span>Continue with Apple</span>
+              </button>
+            </div>
 
             {/* Bottom Switch Link: "Don't have an account? Sign up" (Matches Image 1, 2, 3) */}
             <div className="mt-5 text-center text-xs">

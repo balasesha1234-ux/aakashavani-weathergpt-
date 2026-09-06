@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 from .database import SessionLocal, engine, Base
-from .models import User, Location, Warning, WarningArea, EmergencyResource, WeatherObservation, Forecast, Subscription
+from .models import User, OAuthAccount, Location, Warning, WarningArea, EmergencyResource, WeatherObservation, Forecast, Subscription
 
 def utc_now():
     return datetime.now(timezone.utc)

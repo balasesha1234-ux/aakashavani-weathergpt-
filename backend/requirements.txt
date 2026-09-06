@@ -12,3 +12,4 @@ python-dotenv>=1.0.1
 pyjwt>=2.8.0
 numpy>=1.26.0
 redis>=5.0.0
+cryptography>=42.0.0

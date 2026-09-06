@@ -145,8 +145,36 @@ export default function App() {
     return null; // Guest Citizen by default
   });
 
-  // Rehydrate session from database JWT token on startup
+  // Rehydrate session & handle OAuth redirect callback (?token=... or ?error=...)
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const callbackToken = urlParams.get('token');
+    const callbackError = urlParams.get('error');
+
+    if (callbackToken) {
+      localStorage.setItem('aakashavani_token', callbackToken);
+      getCurrentUser(callbackToken).then(user => {
+        if (user) {
+          setUserProfile(user);
+          localStorage.setItem('aakashavani_user', JSON.stringify(user));
+          if (user.district) setActiveDistrict(user.district.split(',')[0].trim());
+        }
+      }).catch(err => console.warn('OAuth callback user fetch error:', err));
+      
+      // Clean query string and return to root home
+      window.history.replaceState(null, '', '/');
+      setActiveWorkspace('home');
+      return;
+    }
+
+    if (callbackError) {
+      console.warn('OAuth authentication error reported:', callbackError);
+      window.history.replaceState(null, '', '/login');
+      setActiveWorkspace('login');
+      return;
+    }
+
     const token = localStorage.getItem('aakashavani_token');
     if (token) {
       getCurrentUser(token).then(user => {

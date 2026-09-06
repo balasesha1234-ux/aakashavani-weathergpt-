@@ -12,7 +12,7 @@ except ImportError:
                     os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
@@ -20,6 +20,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import time
 import json
+import urllib.parse
+import logging
 
 from .database import get_db, Base, engine, SessionLocal, verify_db_health
 from .seed_data import seed_database
@@ -28,7 +30,7 @@ from .services.emergency_service import EmergencyService
 from .services.rules_engine import RulesEngine
 from .services.ai_agent import WeatherGPTAgent
 from .services.auth_service import AuthService
-from .models import User, Location, Warning, WarningArea, EmergencyResource, WeatherObservation, ResponseTrace, Feedback, DataSource, OTPVerification
+from .models import User, OAuthAccount, Location, Warning, WarningArea, EmergencyResource, WeatherObservation, ResponseTrace, Feedback, DataSource, OTPVerification
 from .middleware import SecurityHeadersMiddleware, RateLimiterMiddleware, sanitize_string, validate_coordinates
 
 # Ensure database tables exist and are seeded
@@ -260,6 +262,128 @@ def auth_apple_login(req: AppleAuthRequest, db: Session = Depends(get_db)):
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error", "Apple authentication failed"))
     return res
+
+@app.get("/api/v1/auth/google/authorize")
+@app.get("/api/auth/google/authorize")
+def auth_google_authorize(
+    redirect_uri: Optional[str] = Query(None),
+    redirect_to: Optional[str] = Query(None),
+    json_mode: bool = Query(False)
+):
+    """Initiates Google OAuth 2.0 Authorization Code flow."""
+    res = AuthService.get_google_authorize_url(redirect_uri=redirect_uri, redirect_to=redirect_to)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to build Google authorize URL"))
+    if json_mode:
+        return res
+    return RedirectResponse(url=res["url"], status_code=303)
+
+@app.get("/api/v1/auth/google/callback")
+@app.get("/api/auth/google/callback")
+def auth_google_callback(
+    request: Request,
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Handles Google OAuth authorization callback, issues application JWT, and redirects to frontend."""
+    frontend_base = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+
+    if error:
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error={urllib.parse.quote(error)}", status_code=303)
+
+    if not code or not state:
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error=missing_code_or_state", status_code=303)
+
+    current_redirect = str(request.url).split("?")[0]
+    res = AuthService.process_google_callback(code=code, state=state, redirect_uri=current_redirect, db=db)
+
+    if not res.get("success"):
+        err_msg = res.get("error", "Google authentication failed")
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error={urllib.parse.quote(err_msg)}", status_code=303)
+
+    token = res.get("token")
+    redirect_path = res.get("redirect_to", "/auth/callback")
+    if not redirect_path.startswith("/"):
+        redirect_path = "/" + redirect_path
+    target_url = f"{frontend_base}{redirect_path}?token={token}"
+    return RedirectResponse(url=target_url, status_code=303)
+
+@app.get("/api/v1/auth/apple/authorize")
+@app.get("/api/auth/apple/authorize")
+def auth_apple_authorize(
+    redirect_uri: Optional[str] = Query(None),
+    redirect_to: Optional[str] = Query(None),
+    json_mode: bool = Query(False)
+):
+    """Initiates Sign in with Apple Authorization Code flow."""
+    res = AuthService.get_apple_authorize_url(redirect_uri=redirect_uri, redirect_to=redirect_to)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Failed to build Apple authorize URL"))
+    if json_mode:
+        return res
+    return RedirectResponse(url=res["url"], status_code=303)
+
+@app.post("/api/v1/auth/apple/callback")
+@app.post("/api/auth/apple/callback")
+@app.get("/api/v1/auth/apple/callback")
+@app.get("/api/auth/apple/callback")
+async def auth_apple_callback(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Handles Apple Sign In form_post / GET callback, issues application JWT, and redirects to frontend."""
+    frontend_base = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
+
+    code = None
+    state = None
+    id_token = None
+    user_json = None
+    error = None
+
+    if request.method == "POST":
+        try:
+            form = await request.form()
+            code = form.get("code")
+            state = form.get("state")
+            id_token = form.get("id_token")
+            user_json = form.get("user")
+            error = form.get("error")
+        except Exception as e:
+            logging.getLogger('aakashavani.auth').warning(f"Failed to read Apple form_post: {e}")
+    else:
+        code = request.query_params.get("code")
+        state = request.query_params.get("state")
+        id_token = request.query_params.get("id_token")
+        error = request.query_params.get("error")
+
+    if error:
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error={urllib.parse.quote(error)}", status_code=303)
+
+    if not state:
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error=missing_oauth_state", status_code=303)
+
+    current_redirect = str(request.url).split("?")[0]
+    res = AuthService.process_apple_callback(
+        code=code,
+        id_token=id_token,
+        user_json=user_json,
+        state=state,
+        redirect_uri=current_redirect,
+        db=db
+    )
+
+    if not res.get("success"):
+        err_msg = res.get("error", "Apple authentication failed")
+        return RedirectResponse(url=f"{frontend_base}/auth/callback?error={urllib.parse.quote(err_msg)}", status_code=303)
+
+    token = res.get("token")
+    redirect_path = res.get("redirect_to", "/auth/callback")
+    if not redirect_path.startswith("/"):
+        redirect_path = "/" + redirect_path
+    target_url = f"{frontend_base}{redirect_path}?token={token}"
+    return RedirectResponse(url=target_url, status_code=303)
 
 @app.get("/api/v1/auth/me")
 @app.get("/api/auth/me")

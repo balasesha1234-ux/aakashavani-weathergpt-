@@ -35,6 +35,24 @@ class User(Base):
 
     patterns = relationship("UserPattern", back_populates="user", uselist=False, cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
+
+
+class OAuthAccount(Base):
+    __tablename__ = "oauth_accounts"
+    __table_args__ = (
+        Index("ix_oauth_provider_uid", "provider", "provider_user_id", unique=True),
+    )
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    user_id = Column(String(36), ForeignKey("users.user_id"), nullable=False, index=True)
+    provider = Column(String(30), nullable=False)  # 'google' | 'apple'
+    provider_user_id = Column(String(255), nullable=False)  # sub from provider
+    email = Column(String(150), nullable=True, index=True)
+    created_at = Column(DateTime, default=utc_now)
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now)
+
+    user = relationship("User", back_populates="oauth_accounts")
 
 
 class OTPVerification(Base):

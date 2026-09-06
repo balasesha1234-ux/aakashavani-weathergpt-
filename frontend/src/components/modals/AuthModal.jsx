@@ -26,7 +26,11 @@ import {
   loginWithGoogle, 
   loginWithApple, 
   updateProfile, 
-  logoutUser 
+  logoutUser,
+  getGoogleAuthorizeUrl,
+  getAppleAuthorizeUrl,
+  startGoogleOAuth,
+  startAppleOAuth
 } from '../../services/api';
 
 export default function AuthModal({
@@ -279,11 +283,39 @@ export default function AuthModal({
     }
   };
 
-  // REAL Apple ID Login
+  // Trigger Server-Side Google OAuth Authorization Code flow
+  const handleServerGoogleOAuth = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setIsLoading(true);
+    try {
+      const authUrl = await getGoogleAuthorizeUrl('/auth/callback');
+      if (authUrl) {
+        window.location.href = authUrl;
+        return;
+      }
+    } catch (err) {
+      setErrorMsg(err.message || 'Google OAuth is not configured on server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // REAL Apple ID Login with OAuth authorization code flow
   const handleAppleLogin = async () => {
     setErrorMsg('');
     setSuccessMsg('');
     setIsLoading(true);
+    try {
+      const authUrl = await getAppleAuthorizeUrl('/auth/callback');
+      if (authUrl) {
+        window.location.href = authUrl;
+        return;
+      }
+    } catch (e) {
+      console.log('Apple OAuth not configured on server, using fallback:', e.message);
+    }
+
     try {
       const res = await loginWithApple({
         email: 'citizen.bharat@icloud.com',
@@ -706,6 +738,17 @@ export default function AuthModal({
 
                 {/* Official Google GIS Button Container */}
                 <div className="flex justify-center py-2" ref={googleBtnRef}></div>
+
+                {/* Direct Google OAuth 2.0 Authorization Code Flow Button */}
+                <button
+                  type="button"
+                  onClick={handleServerGoogleOAuth}
+                  disabled={isLoading}
+                  className="w-full py-2.5 px-4 rounded-2xl border border-blue-500/40 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-300 font-bold text-xs flex items-center justify-center gap-2.5 transition cursor-pointer shadow-sm"
+                >
+                  <Globe className="w-4 h-4 text-blue-500" />
+                  <span>Launch Google OAuth Sign-In (Redirect Flow)</span>
+                </button>
 
                 <div className="relative flex items-center justify-center">
                   <div className="border-t border-slate-200 dark:border-white/10 w-full"></div>
