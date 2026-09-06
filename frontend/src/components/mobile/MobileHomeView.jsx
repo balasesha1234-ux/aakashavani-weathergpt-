@@ -263,7 +263,9 @@ export default function MobileHomeView({
               <h3 className="text-xs font-bold text-slate-900 dark:text-white leading-tight">
                 {district}
               </h3>
-              <p className="text-[10px] text-slate-400 mt-0.5">11 May, 9:30 AM</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </p>
             </div>
           </div>
 

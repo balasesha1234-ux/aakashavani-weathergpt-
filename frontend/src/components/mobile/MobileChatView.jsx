@@ -64,6 +64,33 @@ export default function MobileChatView({
     }
   }, [messages, isLoading]);
 
+  // Clean text formatter for markdown bold & bullets in mobile chat
+  const renderFormattedText = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return lines.map((line, lIdx) => {
+      const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('• ') || line.trim().startsWith('* ');
+      const cleanLine = isBullet ? line.trim().replace(/^[-•*]\s+/, '') : line;
+      const parts = cleanLine.split(/(\*\*.*?\*\*)/g);
+      const content = parts.map((part, pIdx) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={pIdx} className="font-bold text-slate-900 dark:text-white">{part.slice(2, -2)}</strong>;
+        }
+        return part;
+      });
+
+      if (isBullet) {
+        return (
+          <div key={lIdx} className="flex items-start gap-1.5 my-0.5 pl-0.5">
+            <span className="text-emerald-500 font-bold shrink-0">•</span>
+            <span className="flex-1">{content}</span>
+          </div>
+        );
+      }
+      return <div key={lIdx} className={lIdx > 0 ? "mt-1" : ""}>{content}</div>;
+    });
+  };
+
   // Audio Speech Readout for messages
   const toggleSpeech = (text, index) => {
     if (!('speechSynthesis' in window)) return;
@@ -300,7 +327,42 @@ export default function MobileChatView({
                   </div>
                 )}
 
-                <div className="whitespace-pre-wrap">{msg.text}</div>
+                <div className="leading-relaxed">
+                  {renderFormattedText(msg.text)}
+                </div>
+
+                {!isUser && msg.data?.weather?.current && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-slate-50 dark:bg-black/30 border border-slate-200/60 dark:border-white/10 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-800 dark:text-slate-100">
+                      <span className="flex items-center gap-1.5">
+                        <span>🌤️</span>
+                        <span>{msg.data.weather.current.condition}</span>
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-mono text-xs">
+                        {msg.data.weather.current.temperature != null ? `${Math.round(msg.data.weather.current.temperature)}°C` : ''}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 pt-1 border-t border-slate-200/40 dark:border-white/5 text-[10px] text-slate-600 dark:text-slate-400">
+                      <div>💧 {msg.data.weather.current.humidity}%</div>
+                      <div>💨 {msg.data.weather.current.wind_speed_kmh} km/h</div>
+                      <div>🌧️ {msg.data.weather.current.rainfall_mm} mm</div>
+                    </div>
+                  </div>
+                )}
+
+                {!isUser && msg.data?.agromet_advisory && (
+                  <div className="mt-2 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 text-[11px]">
+                    <div className="flex items-center gap-1.5 font-bold text-emerald-800 dark:text-emerald-300">
+                      <span>🌿</span>
+                      <span>{msg.data.agromet_advisory.crop || 'Agromet Advisory'}</span>
+                    </div>
+                    {msg.data.agromet_advisory.recommendations?.length > 0 && (
+                      <p className="mt-1 text-[10px] text-emerald-900 dark:text-emerald-200 leading-tight">
+                        {msg.data.agromet_advisory.recommendations[0]}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {!isUser && (
                   <div className="mt-2 pt-2 border-t border-slate-100 dark:border-white/10 flex items-center justify-between gap-2 text-[10px] text-slate-400">

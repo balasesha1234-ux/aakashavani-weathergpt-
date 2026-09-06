@@ -300,9 +300,26 @@ class LocalOllamaProvider(BaseModelProvider):
     name = "local_ollama"
     BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     DEFAULT_MODEL = os.getenv("OLLAMA_MODEL", "suraksha360")
+    _last_check_t = 0.0
+    _cached_available = True
 
     def is_available(self) -> bool:
-        return True
+        base = os.getenv("OLLAMA_BASE_URL", self.BASE_URL)
+        # Cloud environments (Render, Vercel) cannot access localhost:11434 directly.
+        if (os.getenv("RENDER") or os.getenv("VERCEL")) and ("localhost" in base or "127.0.0.1" in base):
+            return False
+        
+        now = time.time()
+        if now - LocalOllamaProvider._last_check_t > 8.0:
+            LocalOllamaProvider._last_check_t = now
+            try:
+                import urllib.request
+                req = urllib.request.Request(f"{base.rstrip('/')}/api/tags", headers={"User-Agent": "AakashaVani/1.0"})
+                with urllib.request.urlopen(req, timeout=0.8) as response:
+                    LocalOllamaProvider._cached_available = (response.status == 200)
+            except Exception:
+                LocalOllamaProvider._cached_available = False
+        return LocalOllamaProvider._cached_available
 
     def model_name(self) -> str:
         return os.getenv("OLLAMA_MODEL", self.DEFAULT_MODEL)
@@ -316,13 +333,7 @@ class LocalOllamaProvider(BaseModelProvider):
         ]
 
     async def health_check(self) -> bool:
-        url = f"{self.BASE_URL.rstrip('/')}/api/tags"
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as client:
-                res = await client.get(url)
-                return res.status_code == 200
-        except Exception:
-            return False
+        return self.is_available()
 
     async def generate(
         self,
@@ -357,7 +368,6 @@ class LocalOllamaProvider(BaseModelProvider):
                 {"role": "user", "content": query}
             ],
             "stream": False,
-            "think": False,
             "keep_alive": "60m",
             "options": {
                 "temperature": temperature,
@@ -376,8 +386,17 @@ class LocalOllamaProvider(BaseModelProvider):
                 if resp.status_code == 200:
                     data = resp.json()
                     msg = data.get("message", {})
-                    raw_content = msg.get("content", "")
+                    raw_content = msg.get("content", "") or ""
+                    # Fallback to thinking field if content is empty
+                    if not raw_content and msg.get("thinking"):
+                        raw_content = msg.get("thinking", "")
                     clean_text = re.sub(r'<think>.*?</think>', '', raw_content, flags=re.DOTALL).strip()
+                    if not clean_text and raw_content:
+                        clean_text = raw_content.replace('<think>', '').replace('</think>', '').strip()
+                    
+                    if not clean_text:
+                        return None
+
                     telemetry = {
                         "provider": "local_ollama",
                         "model": target_model,
@@ -770,7 +789,7 @@ class ModelRouter:
         """
         force_local = os.getenv("FORCE_LOCAL_ONLY", "false").lower() in ["true", "1", "yes"]
         local_model = os.getenv("LOCAL_MODEL", os.getenv("OLLAMA_MODEL", "suraksha360"))
-        if force_local:
+        if force_local and cls.PROVIDERS["local_ollama"].is_available():
             desc = model_registry.get_model("suraksha360") or model_registry.get_model("local_qwen")
             return "local_ollama", local_model, "Configured FORCE_LOCAL_ONLY override active", desc
 
@@ -1680,7 +1699,9 @@ class AgentPlanner:
         companion_terms = [
             "tired", "tierd", "exhausted", "hectic", "stress", "stressed", "rough day", "hard day",
             "exam", "exams", "study", "sad", "upset", "thak gaya", "thak gya", "alasi poyanu",
-            "bro", "bhai", "yaar", "dude", "buddy", "bore", "boring", "joke", "fun fact", "kaisa hai", "kya chal raha hai"
+            "bro", "bhai", "yaar", "dude", "buddy", "bore", "boring", "joke", "fun fact", "kaisa hai", "kya chal raha hai",
+            "who are you", "what do you do", "what can you do", "tell me about yourself", "how do you work",
+            "who created you", "who made you", "introduce yourself", "ap kon ho", "meeru evaru"
         ]
         has_explicit_weather = _kw([
             "rain", "rainfall", "temperature", "temp", "wind", "humidity", "forecast", "cloud",

@@ -16,8 +16,5 @@ PARAMETER num_ctx 4096
 PARAMETER num_predict 300
 PARAMETER repeat_penalty 1.1
 
-# Stop Tokens to Prevent Runaway Generation & Suppress Internal Thinking Chains
 PARAMETER stop "<|im_start|>"
 PARAMETER stop "<|im_end|>"
-PARAMETER stop "<think>"
-PARAMETER stop "</think>"

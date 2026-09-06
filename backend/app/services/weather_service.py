@@ -27,8 +27,11 @@ class WeatherService:
             f"daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max&"
             f"timezone=Asia%2FKolkata"
         )
+        headers = {
+            "User-Agent": "AakashaVani/1.0 (MoES IMD Meteorological AI; contact@aakashavani.in)"
+        }
         try:
-            async with httpx.AsyncClient(timeout=12.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
                 for attempt in range(2):
                     resp = await client.get(url)
                     if resp.status_code == 200:

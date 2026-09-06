@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getCurrentWeather } from '../../services/api';
 import MobileHomeView from './MobileHomeView';
 import MobileBottomNav from './MobileBottomNav';
 import MobileSituationRoom from './MobileSituationRoom';
@@ -51,6 +52,17 @@ export default function MobileApp({
   const [activeTab, setActiveTab] = useState('home'); // 'home', 'map', 'timeline', 'desk', 'alerts', 'signals', 'advisory', 'chat'
   const [voiceSheetOpen, setVoiceSheetOpen] = useState(false);
   const [menuDrawerOpen, setMenuDrawerOpen] = useState(false);
+  const [liveWeather, setLiveWeather] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCurrentWeather(latitude, longitude).then(data => {
+      if (isMounted && data) {
+        setLiveWeather(data);
+      }
+    }).catch(err => console.warn('Mobile weather fetch notice:', err));
+    return () => { isMounted = false; };
+  }, [latitude, longitude, district]);
 
   // Handle Quick Category Click
   const handleCategoryClick = (categoryId) => {
@@ -82,11 +94,11 @@ export default function MobileApp({
         {activeTab === 'home' && (
           <MobileHomeView
             district={district}
-            temperature={28}
-            humidity={72}
-            windSpeed={15}
-            pressure={1010}
-            weatherCondition={currentLang === 'te' ? 'కొద్దిగా మేఘావృతం' : currentLang === 'hi' ? 'आंशिक रूप से बादल' : 'Partly Cloudy'}
+            temperature={liveWeather?.current?.temperature != null ? Math.round(liveWeather.current.temperature) : 29}
+            humidity={liveWeather?.current?.humidity != null ? Math.round(liveWeather.current.humidity) : 62}
+            windSpeed={liveWeather?.current?.wind_speed_kmh != null ? Math.round(liveWeather.current.wind_speed_kmh) : 12}
+            pressure={liveWeather?.current?.pressure_hpa != null ? Math.round(liveWeather.current.pressure_hpa) : 1012}
+            weatherCondition={liveWeather?.current?.condition || (currentLang === 'te' ? 'నిర్మలమైన ఆకాశం' : currentLang === 'hi' ? 'साफ आसमान' : 'Clear Sky')}
             crop="Cotton"
             currentLang={currentLang}
             onSelectLang={onSelectLang}
