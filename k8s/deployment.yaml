@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aakashavani-backend
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: aakashavani-backend
+  template:
+    metadata:
+      labels:
+        app: aakashavani-backend
+    spec:
+      containers:
+        - name: backend
+          image: aakashavani/backend:latest
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1536Mi

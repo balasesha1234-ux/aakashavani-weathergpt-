@@ -1,0 +1,66 @@
+# ==========================================
+# AakashaVani Git Ignore
+# ==========================================
+
+# 1. Environment Variables & Secrets (CRITICAL: NEVER COMMIT)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+*.pem
+*.key
+
+# 2. Virtual Environments & Python Cache
+.venv/
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 3. Node Dependencies & Frontend Distribution
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+.vite/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 4. Database WAL & Temporary Files
+*.db-shm
+*.db-wal
+*.sqlite-shm
+*.sqlite-wal
+backups/
+backend/backups/
+
+# 5. Heavy Model Weights & Trained Adapters (>100MB)
+*.gguf
+*.bin
+*.pt
+*.pth
+*.safetensors
+train/suraksha360_lora_output/
+backend/train/suraksha360_lora_output/
+backend/train/aakashavani_lora_model/*.bin
+backend/train/aakashavani_lora_model/*.safetensors
+
+# 6. IDE & OS Artifacts
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo

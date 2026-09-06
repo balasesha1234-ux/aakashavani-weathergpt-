@@ -1,0 +1,13 @@
+{
+  "auto_map": {
+    "AutoTokenizer": [
+      "tokenizer_config.py",
+      "LlamaTokenizerFast"
+    ]
+  },
+  "bos_token": "<s>",
+  "eos_token": "</s>",
+  "model_max_length": 2048,
+  "tokenizer_class": "LlamaTokenizerFast",
+  "unk_token": "<unk>"
+}

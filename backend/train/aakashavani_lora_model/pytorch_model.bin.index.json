@@ -1,0 +1,6 @@
+{
+  "weight_map": {
+    "base_model.model.model.layers.0.self_attn.q_proj.lora_A.default": "adapter_model.bin",
+    "base_model.model.model.layers.0.self_attn.q_proj.lora_B.default": "adapter_model.bin"
+  }
+}

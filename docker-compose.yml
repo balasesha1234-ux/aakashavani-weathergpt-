@@ -1,0 +1,127 @@
+# ==============================================================================
+# 🐳 AakashaVani (WeatherGPT) — Production Multi-Node Horizontal Cluster
+# Architecture: Nginx Load Balancer + 3 Horizontal Backend Nodes + Redis Cache
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Reverse Proxy & Layer-7 Load Balancer (Nginx)
+  # ----------------------------------------------------------------------------
+  load-balancer:
+    image: nginx:alpine
+    container_name: aakashavani-load-balancer
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/var/www/aakashavani/frontend/dist:ro
+    depends_on:
+      - backend-node-1
+      - backend-node-2
+      - backend-node-3
+    networks:
+      - aakashavani-network
+
+  # ----------------------------------------------------------------------------
+  # 2. Horizontal Backend Node 1 (Uvicorn 4-Thread Worker)
+  # ----------------------------------------------------------------------------
+  backend-node-1:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aakashavani-node-1
+    restart: always
+    environment:
+      - NODE_ID=node-1
+      - PORT=8001
+      - WORKERS=4
+      - REDIS_URL=redis://redis-cache:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8001:8001"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+    networks:
+      - aakashavani-network
+
+  # ----------------------------------------------------------------------------
+  # 3. Horizontal Backend Node 2 (Uvicorn 4-Thread Worker)
+  # ----------------------------------------------------------------------------
+  backend-node-2:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aakashavani-node-2
+    restart: always
+    environment:
+      - NODE_ID=node-2
+      - PORT=8002
+      - WORKERS=4
+      - REDIS_URL=redis://redis-cache:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8002:8002"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+    networks:
+      - aakashavani-network
+
+  # ----------------------------------------------------------------------------
+  # 4. Horizontal Backend Node 3 (Uvicorn 4-Thread Worker)
+  # ----------------------------------------------------------------------------
+  backend-node-3:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aakashavani-node-3
+    restart: always
+    environment:
+      - NODE_ID=node-3
+      - PORT=8003
+      - WORKERS=4
+      - REDIS_URL=redis://redis-cache:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8003:8003"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1536M
+    networks:
+      - aakashavani-network
+
+  # ----------------------------------------------------------------------------
+  # 5. Distributed Redis Cache & Shared Session Engine
+  # ----------------------------------------------------------------------------
+  redis-cache:
+    image: redis:7-alpine
+    container_name: aakashavani-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - aakashavani-network
+
+networks:
+  aakashavani-network:
+    driver: bridge
+
+volumes:
+  redis-data:

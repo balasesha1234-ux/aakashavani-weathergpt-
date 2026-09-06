@@ -1,0 +1,267 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-page: #080C14;
+    --bg-surface: #0B1120;
+    --bg-card: #0F172A;
+    --bg-card-border: rgba(255, 255, 255, 0.12);
+    --text-primary: #FFFFFF;
+    --text-secondary: #94A3B8;
+    --user-bubble-bg: #1E293B;
+    --user-bubble-text: #FFFFFF;
+    --input-bg: #0F172A;
+    --input-text: #FFFFFF;
+  }
+
+  .light-theme {
+    --bg-page: #F5F7F3;
+    --bg-surface: #FFFFFF;
+    --bg-card: #FFFFFF;
+    --bg-card-border: #E5EBE3;
+    --text-primary: #18251C;
+    --text-secondary: #4D5E51;
+    --user-bubble-bg: #2E7D32;
+    --user-bubble-text: #FFFFFF;
+    --input-bg: #FFFFFF;
+    --input-text: #18251C;
+  }
+
+  body {
+    background-color: var(--bg-page);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+  }
+
+  textarea, input {
+    color: var(--input-text) !important;
+  }
+}
+
+/* Glass Panels & Cards with Explicit Solid Colors */
+.glass-panel {
+  background-color: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+}
+
+/* Leaflet Map Canvas Polish */
+.map-tiles-dark .leaflet-tile-pane {
+  /* Retain true tile luminosity without artificial color inversion */
+  filter: contrast(105%) brightness(95%);
+}
+
+.glass-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  color: var(--text-primary);
+}
+
+.glass-card:hover {
+  border-color: #00F0FF;
+  transform: translateY(-1px);
+}
+
+/* Main Layout Gradients */
+.app-bg-gradient {
+  background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-page) 100%);
+}
+
+.app-sidebar {
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--bg-card-border);
+  color: var(--text-primary);
+}
+
+.app-navbar {
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--bg-card-border);
+  color: var(--text-primary);
+}
+
+.app-input-bar {
+  background-color: var(--input-bg) !important;
+  border: 1px solid var(--bg-card-border) !important;
+  color: var(--input-text) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.user-chat-bubble {
+  background-color: var(--user-bubble-bg) !important;
+  color: var(--user-bubble-text) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-chat-bubble * {
+  color: var(--user-bubble-text) !important;
+}
+
+.assistant-chat-bubble {
+  color: var(--text-primary) !important;
+}
+
+.assistant-chat-bubble p,
+.assistant-chat-bubble div,
+.assistant-chat-bubble span {
+  color: inherit;
+}
+
+.app-modal-container {
+  background-color: var(--bg-surface) !important;
+  border: 1px solid var(--bg-card-border) !important;
+  color: var(--text-primary) !important;
+}
+
+.app-modal-sidebar {
+  background-color: var(--bg-page) !important;
+  border-color: var(--bg-card-border) !important;
+}
+
+.app-modal-content {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Shimmer Thinking Wave Animation */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(0, 240, 255, 0.05) 25%, rgba(0, 240, 255, 0.25) 50%, rgba(0, 240, 255, 0.05) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite ease-in-out;
+}
+
+/* Staggered Card Cascade Fade-In */
+@keyframes slideUpFade {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-card-enter {
+  animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.delay-100 { animation-delay: 100ms; }
+.delay-200 { animation-delay: 200ms; }
+.delay-300 { animation-delay: 300ms; }
+.delay-400 { animation-delay: 400ms; }
+
+/* Smooth Post-Text Map Reveal Animation */
+@keyframes mapRevealEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.97);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 0.9;
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.animate-map-reveal {
+  animation: mapRevealEnter 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Blinking Typewriter Cursor */
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.typing-cursor-glow {
+  display: inline-block;
+  width: 7px;
+  height: 16px;
+  background-color: #00F0FF;
+  box-shadow: 0 0 8px #00F0FF;
+  margin-left: 3px;
+  vertical-align: middle;
+  animation: cursorBlink 0.7s infinite;
+  border-radius: 2px;
+}
+
+.light-theme .typing-cursor-glow {
+  background-color: #0284C7;
+  box-shadow: 0 0 8px #0284C7;
+}
+
+/* Sound Wave Equalizer */
+@keyframes wave1 {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+@keyframes wave2 {
+  0%, 100% { height: 14px; }
+  50% { height: 6px; }
+}
+@keyframes wave3 {
+  0%, 100% { height: 8px; }
+  50% { height: 18px; }
+}
+@keyframes wave4 {
+  0%, 100% { height: 16px; }
+  50% { height: 4px; }
+}
+
+.wave-bar-1 { animation: wave1 0.7s infinite ease-in-out; }
+.wave-bar-2 { animation: wave2 0.8s infinite ease-in-out; }
+.wave-bar-3 { animation: wave3 0.6s infinite ease-in-out; }
+.wave-bar-4 { animation: wave4 0.9s infinite ease-in-out; }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Smooth Touch Momentum Scrolling */
+.touch-pan-y {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overscroll-contain {
+  overscroll-behavior: contain;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

@@ -1,0 +1,23 @@
+FROM qwen3:8b
+
+# Sovereign Identity & Guardrails
+SYSTEM """You are Suraksha360, the sovereign on-device AI for AakashaVani, running locally on dedicated hardware.
+Your operational directives:
+1. Provide empathetic conversational support, local weather context, and climate/science education.
+2. Communicate fluently and naturally in English, Telugu, and Hindi/Hinglish.
+3. Keep responses direct, helpful, and concise without unnecessary conversational preamble or repetitive filler.
+4. When physical weather telemetry or disaster alerts are provided in context, treat them as authoritative and absolute. Never contradict verified sensor data."""
+
+# Optimized Inference Parameters for Speed & Consistency
+PARAMETER temperature 0.35
+PARAMETER top_p 0.90
+PARAMETER top_k 40
+PARAMETER num_ctx 4096
+PARAMETER num_predict 300
+PARAMETER repeat_penalty 1.1
+
+# Stop Tokens to Prevent Runaway Generation & Suppress Internal Thinking Chains
+PARAMETER stop "<|im_start|>"
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<think>"
+PARAMETER stop "</think>"
