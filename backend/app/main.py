@@ -112,6 +112,7 @@ class PhoneSendOTPRequest(BaseModel):
 class PhoneVerifyOTPRequest(BaseModel):
     phone: str = Field(..., max_length=25)
     otp: str = Field(..., max_length=10)
+    email: Optional[str] = Field(None, max_length=150, description="User email address")
     name: Optional[str] = Field(None, max_length=100)
     district: Optional[str] = Field(None, max_length=100)
     role: Optional[str] = Field(None, max_length=50)
@@ -136,7 +137,10 @@ class ProfileUpdateRequest(BaseModel):
     pm_kisan_id: Optional[str] = Field(None, max_length=50)
 
 class PasswordLoginRequest(BaseModel):
-    identifier: str = Field(..., max_length=150, description="Email or 10-digit mobile number")
+    identifier: Optional[str] = Field(None, max_length=150, description="Email or 10-digit mobile number")
+    email: Optional[str] = Field(None, max_length=150, description="User email address")
+    mobile_number: Optional[str] = Field(None, max_length=25, description="10-digit Indian mobile number")
+    phone: Optional[str] = Field(None, max_length=25)
     password: str = Field(..., min_length=1, max_length=100)
     remember_me: Optional[bool] = Field(True)
 
@@ -228,7 +232,8 @@ def auth_verify_phone_otp(req: PhoneVerifyOTPRequest, db: Session = Depends(get_
         name=req.name,
         district=req.district,
         role=req.role,
-        pm_kisan_id=req.pm_kisan_id
+        pm_kisan_id=req.pm_kisan_id,
+        email=req.email
     )
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error", "Failed to verify OTP"))
@@ -421,8 +426,15 @@ def auth_logout():
 @app.post("/api/v1/auth/login")
 @app.post("/api/auth/login")
 def auth_password_login(req: PasswordLoginRequest, db: Session = Depends(get_db)):
-    """Logs in using mobile number or email + password, supporting Remember Me."""
-    res = AuthService.login_with_password(req.identifier, req.password, req.remember_me, db)
+    """Logs in using mobile number and email + password, supporting Remember Me."""
+    res = AuthService.login_with_password(
+        identifier=req.identifier,
+        password=req.password,
+        remember_me=req.remember_me or False,
+        db=db,
+        email=req.email,
+        mobile_number=req.mobile_number or req.phone
+    )
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error", "Invalid credentials"))
     return res

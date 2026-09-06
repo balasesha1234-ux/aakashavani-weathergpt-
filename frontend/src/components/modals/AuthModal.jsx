@@ -18,19 +18,19 @@ import {
   RefreshCw,
   AlertTriangle,
   Lock,
-  Building2
+  Building2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { 
   sendPhoneOtp, 
   verifyPhoneOtp, 
+  loginWithPassword,
   loginWithGoogle, 
-  loginWithApple, 
   updateProfile, 
   logoutUser,
   getGoogleAuthorizeUrl,
-  getAppleAuthorizeUrl,
-  startGoogleOAuth,
-  startAppleOAuth
+  startGoogleOAuth
 } from '../../services/api';
 
 export default function AuthModal({
@@ -42,7 +42,13 @@ export default function AuthModal({
 }) {
   if (!isOpen) return null;
 
-  const [authMethod, setAuthMethod] = useState('phone_otp'); // 'phone_otp' | 'google' | 'apple'
+  const [authMethod, setAuthMethod] = useState('password'); // 'password' | 'phone_otp' | 'google'
+
+  // Email & Mobile Password Flow State
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginMobile, setLoginMobile] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   
   // Phone OTP Flow State
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -73,6 +79,7 @@ export default function AuthModal({
     {
       label: '🌾 Kisan Rameshwar Patil',
       role: 'farmer',
+      email: 'rameshwar.patil@kisan.gov.in',
       number: '9876543210',
       district: 'Wardha, Maharashtra',
       pmKisan: 'PMK-MH-2024-8921',
@@ -81,6 +88,7 @@ export default function AuthModal({
     {
       label: '⛵ Fisherman Appa Rao',
       role: 'fisherman',
+      email: 'appa.rao@coastal.gov.in',
       number: '9848012345',
       district: 'Visakhapatnam, AP',
       pmKisan: 'AP-VZG-MF-88',
@@ -89,6 +97,7 @@ export default function AuthModal({
     {
       label: '🚨 Officer Dr. K. Prasad',
       role: 'disaster_officer',
+      email: 'k.prasad@ndma.gov.in',
       number: '9440112233',
       district: 'Hyderabad, Telangana',
       pmKisan: 'NDMA-TS-DDMA-04',
@@ -176,6 +185,9 @@ export default function AuthModal({
   // 1-Click quick select preset for testing
   const handleSelectPreset = (preset) => {
     setPhoneNumber(preset.number);
+    setLoginMobile(preset.number);
+    setLoginEmail(preset.email || '');
+    setLoginPassword('AakashaVani@2025');
     setCitizenName(preset.label.replace(/^[^\s]+\s/, ''));
     setCitizenDistrict(preset.district.split(',')[0]);
     setCitizenRole(preset.role);
@@ -301,37 +313,44 @@ export default function AuthModal({
     }
   };
 
-  // REAL Apple ID Login with OAuth authorization code flow
-  const handleAppleLogin = async () => {
+  // Native Email & Mobile Password Login
+  const handleEmailMobileLogin = async (e) => {
+    if (e) e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
-    setIsLoading(true);
-    try {
-      const authUrl = await getAppleAuthorizeUrl('/auth/callback');
-      if (authUrl) {
-        window.location.href = authUrl;
-        return;
-      }
-    } catch (e) {
-      console.log('Apple OAuth not configured on server, using fallback:', e.message);
+
+    const cleanEmail = loginEmail.trim();
+    const cleanMobile = loginMobile.trim();
+
+    if (!cleanEmail && !cleanMobile) {
+      setErrorMsg('Please enter your email address or mobile number.');
+      return;
+    }
+    if (!loginPassword) {
+      setErrorMsg('Please enter your account password.');
+      return;
     }
 
+    setIsLoading(true);
     try {
-      const res = await loginWithApple({
-        email: 'citizen.bharat@icloud.com',
-        name: 'Vikramaditya Rao'
+      const data = await loginWithPassword({
+        identifier: cleanEmail || cleanMobile,
+        email: cleanEmail || undefined,
+        mobileNumber: cleanMobile || undefined,
+        password: loginPassword,
+        rememberMe: true
       });
 
-      if (res.token) {
-        localStorage.setItem('aakashavani_token', res.token);
-        localStorage.setItem('aakashavani_user', JSON.stringify(res.user));
-        setUserProfile(res.user);
-        onAuthSuccess?.(res.user);
-        setSuccessMsg('Apple ID authenticated successfully!');
+      if (data.token && data.user) {
+        localStorage.setItem('aakashavani_token', data.token);
+        localStorage.setItem('aakashavani_user', JSON.stringify(data.user));
+        setUserProfile(data.user);
+        onAuthSuccess?.(data.user);
+        setSuccessMsg(`Welcome back, ${data.user.name || 'Citizen'}!`);
         setTimeout(() => onClose(), 600);
       }
     } catch (err) {
-      setErrorMsg(err.message || 'Apple ID authentication failed.');
+      setErrorMsg(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
@@ -516,6 +535,18 @@ export default function AuthModal({
         {!userProfile && (
           <div className="p-2 bg-slate-100 dark:bg-[#080C14] border-b border-slate-200 dark:border-white/10 flex gap-1">
             <button
+              onClick={() => { setAuthMethod('password'); setErrorMsg(''); setSuccessMsg(''); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                authMethod === 'password'
+                  ? 'bg-white dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Email & Mobile</span>
+            </button>
+
+            <button
               onClick={() => { setAuthMethod('phone_otp'); setErrorMsg(''); setSuccessMsg(''); }}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 authMethod === 'phone_otp'
@@ -524,7 +555,7 @@ export default function AuthModal({
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>📱 Mobile Phone OTP (+91)</span>
+              <span>SMS OTP</span>
             </button>
 
             <button
@@ -536,19 +567,7 @@ export default function AuthModal({
               }`}
             >
               <Globe className="w-3.5 h-3.5" />
-              <span>Google (Gmail)</span>
-            </button>
-
-            <button
-              onClick={() => { setAuthMethod('apple'); setErrorMsg(''); setSuccessMsg(''); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                authMethod === 'apple'
-                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-white/20 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-              }`}
-            >
-              <span className="text-xs"></span>
-              <span>Apple ID</span>
+              <span>Google</span>
             </button>
           </div>
         )}
@@ -557,6 +576,130 @@ export default function AuthModal({
         {!userProfile && (
           <div className="p-5 sm:p-6 space-y-4">
             
+            {/* METHOD 0: NATIVE EMAIL & MOBILE PASSWORD AUTHENTICATION */}
+            {authMethod === 'password' && (
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    AakashaVani Citizen Identity
+                  </span>
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1">Native Email & Mobile Login</h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                    Sign in with your Email Address and 10-digit Indian Mobile Number.
+                  </p>
+                </div>
+
+                {/* Quick Presets for Evaluation Personas */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-extrabold text-slate-700 dark:text-slate-300 uppercase block">
+                    Quick Stakeholder Personas (Click to autofill):
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {STAKEHOLDER_PRESETS.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => handleSelectPreset(preset)}
+                        className={`p-2 rounded-xl border text-left text-xs transition cursor-pointer flex flex-col justify-between ${
+                          loginMobile === preset.number
+                            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-200 font-bold'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300'
+                        }`}
+                      >
+                        <div className="font-bold truncate">{preset.label}</div>
+                        <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">+91 {preset.number}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Email, Mobile & Password Login Form */}
+                <form onSubmit={handleEmailMobileLogin} className="space-y-3 pt-1">
+                  {/* Email Address */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase block mb-1">
+                      Email Address
+                    </label>
+                    <div className="relative flex items-center">
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+                      <input
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        placeholder="e.g. kisan.patil@gov.in or your@email.com"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Indian Mobile Number */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase block mb-1">
+                      Indian Mobile Number (+91)
+                    </label>
+                    <div className="flex rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-slate-900 overflow-hidden focus-within:border-emerald-500 transition-colors">
+                      <span className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-200 dark:bg-slate-950 border-r border-slate-300 dark:border-white/10 font-mono font-bold flex items-center">
+                        🇮🇳 +91
+                      </span>
+                      <input
+                        type="tel"
+                        maxLength={10}
+                        value={loginMobile}
+                        onChange={(e) => setLoginMobile(e.target.value.replace(/[^\d]/g, ''))}
+                        placeholder="9876543210"
+                        className="w-full bg-transparent px-3 py-2 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase block mb-1">
+                      Account Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 pointer-events-none" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="Enter your password"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-white/10 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Submit Button */}
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>{isLoading ? 'Authenticating...' : 'Sign In with Email & Mobile'}</span>
+                  </button>
+
+                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMethod('phone_otp'); setErrorMsg(''); }}
+                      className="text-emerald-600 dark:text-emerald-400 hover:underline font-semibold cursor-pointer"
+                    >
+                      Login via Instant SMS OTP instead →
+                    </button>
+                    <span className="text-slate-400">Auto-registers new users</span>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* METHOD 1: REAL INDIAN PHONE NUMBER OTP AUTHENTICATION */}
             {authMethod === 'phone_otp' && (
               <div className="space-y-4">
@@ -830,30 +973,7 @@ export default function AuthModal({
               </div>
             )}
 
-            {/* METHOD 3: REAL APPLE ID AUTHENTICATION */}
-            {authMethod === 'apple' && (
-              <div className="space-y-4">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-300 dark:border-white/10">
-                    Apple ID Sign In
-                  </span>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white mt-1">Authenticate with Apple ID</h4>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                    Use your Apple ID for secure, private sign-in with optional Hide My Email support.
-                  </p>
-                </div>
 
-                <button
-                  type="button"
-                  onClick={handleAppleLogin}
-                  disabled={isLoading}
-                  className="w-full py-3.5 bg-black text-white hover:bg-slate-900 border border-slate-700 font-bold text-xs rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-                >
-                  <span className="text-base leading-none"></span>
-                  <span>{isLoading ? 'Connecting to Apple...' : 'Sign In with Apple'}</span>
-                </button>
-              </div>
-            )}
 
           </div>
         )}

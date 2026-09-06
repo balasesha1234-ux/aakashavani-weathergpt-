@@ -54,4 +54,44 @@ print(f"Status: {r5.status_code}")
 print(f"Updated Profile: {r5.json()}")
 assert r5.status_code == 200
 
-print("\nALL AUTHENTICATION API ENDPOINTS PASSED SUCCESSFULLY!")
+import time
+ts = int(time.time()) % 1000000
+test_mobile = f"9823{ts:06d}"
+test_email = f"balwant_{ts}@kisan.gov.in"
+
+print(f"\n--- 6. Testing Native Registration with Email & Mobile Number ({test_mobile}) ---")
+r6 = requests.post(f"{base_url}/api/v1/auth/register", json={
+    "name": "Kisan Balwantrao Deshmukh",
+    "email": test_email,
+    "mobile_number": test_mobile,
+    "password": "SecurePassword123!",
+    "district": "Amravati",
+    "role": "farmer",
+    "pm_kisan_id": f"PMK-MH-2025-{ts}"
+})
+print(f"Status: {r6.status_code}")
+print(f"Registered User: {r6.json()}")
+assert r6.status_code == 200
+assert r6.json()["user"]["email"] == test_email
+assert test_mobile in r6.json()["user"]["phone"]
+
+print("\n--- 7. Testing Native Login with Email & Mobile Number ---")
+r7 = requests.post(f"{base_url}/api/v1/auth/login", json={
+    "email": test_email,
+    "mobile_number": test_mobile,
+    "password": "SecurePassword123!"
+})
+print(f"Status: {r7.status_code}")
+print(f"Login Response: {r7.json()}")
+assert r7.status_code == 200
+assert r7.json()["token"] is not None
+assert r7.json()["user"]["name"] == "Kisan Balwantrao Deshmukh"
+
+print("\n--- 8. Testing Google OAuth Authorize URL ---")
+r8 = requests.get(f"{base_url}/api/v1/auth/google/authorize?redirect_to=/custom/landing&json_mode=true")
+print(f"Status: {r8.status_code}")
+print(f"Google Authorize Response: {r8.json()}")
+assert r8.status_code == 200
+assert "accounts.google.com" in r8.json()["url"]
+
+print("\nALL AUTHENTICATION API ENDPOINTS PASSED SUCCESSFULLY (EMAIL + MOBILE + GOOGLE)!")

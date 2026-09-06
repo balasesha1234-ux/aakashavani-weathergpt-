@@ -711,13 +711,14 @@ export async function sendPhoneOtp(phone) {
   return data;
 }
 
-export async function verifyPhoneOtp({ phone, otp, name, district, role, pmKisanId }) {
+export async function verifyPhoneOtp({ phone, otp, name, district, role, pmKisanId, email }) {
   const res = await fetch(`${API_BASE_URL}/api/v1/auth/phone/verify-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       phone,
       otp,
+      email: email || undefined,
       name: name || undefined,
       district: district || undefined,
       role: role || undefined,
@@ -740,17 +741,6 @@ export async function loginWithGoogle({ credential, email, name, picture }) {
   return data;
 }
 
-export async function loginWithApple({ identityToken, email, name }) {
-  const res = await fetch(`${API_BASE_URL}/api/v1/auth/apple`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identity_token: identityToken, email, name })
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || data.error || 'Apple login failed');
-  return data;
-}
-
 export async function getGoogleAuthorizeUrl(redirectTo = '/auth/callback') {
   const res = await fetch(`${API_BASE_URL}/api/v1/auth/google/authorize?redirect_to=${encodeURIComponent(redirectTo)}&json_mode=true`);
   const data = await res.json();
@@ -758,20 +748,10 @@ export async function getGoogleAuthorizeUrl(redirectTo = '/auth/callback') {
   return data.url;
 }
 
-export async function getAppleAuthorizeUrl(redirectTo = '/auth/callback') {
-  const res = await fetch(`${API_BASE_URL}/api/v1/auth/apple/authorize?redirect_to=${encodeURIComponent(redirectTo)}&json_mode=true`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail || data.error || 'Failed to initialize Apple login');
-  return data.url;
-}
-
 export function startGoogleOAuth(redirectTo = '/auth/callback') {
   window.location.href = `${API_BASE_URL}/api/v1/auth/google/authorize?redirect_to=${encodeURIComponent(redirectTo)}`;
 }
 
-export function startAppleOAuth(redirectTo = '/auth/callback') {
-  window.location.href = `${API_BASE_URL}/api/v1/auth/apple/authorize?redirect_to=${encodeURIComponent(redirectTo)}`;
-}
 
 export async function getCurrentUser(token) {
   if (!token) return null;
@@ -812,11 +792,17 @@ export async function logoutUser() {
   localStorage.removeItem('aakashavani_user');
 }
 
-export async function loginWithPassword({ identifier, password, rememberMe = true }) {
+export async function loginWithPassword({ identifier, email, mobileNumber, password, rememberMe = true }) {
   const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier, password, remember_me: rememberMe })
+    body: JSON.stringify({ 
+      identifier: identifier || email || mobileNumber, 
+      email: email || undefined,
+      mobile_number: mobileNumber || undefined,
+      password, 
+      remember_me: rememberMe 
+    })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail || data.error || 'Invalid credentials');

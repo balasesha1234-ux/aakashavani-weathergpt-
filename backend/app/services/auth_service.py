@@ -185,10 +185,12 @@ class AuthService:
         name: Optional[str] = None,
         district: Optional[str] = None,
         role: Optional[str] = None,
-        pm_kisan_id: Optional[str] = None
+        pm_kisan_id: Optional[str] = None,
+        email: Optional[str] = None
     ) -> Dict[str, Any]:
         cleaned_phone = normalize_phone(phone)
         clean_otp = (otp_code or '').strip()
+        clean_email = (email or '').strip().lower() or None
         now = datetime.now(timezone.utc)
 
         record = db.query(OTPVerification).filter(
@@ -239,6 +241,7 @@ class AuthService:
             default_name = name.strip() if name and name.strip() else f'Citizen (+91-{cleaned_phone[-4:]})'
             user = User(
                 phone_number=cleaned_phone,
+                email=clean_email,
                 name=default_name,
                 district=district.strip() if district and district.strip() else 'Hyderabad',
                 role=role.strip() if role and role.strip() else 'citizen',
@@ -251,6 +254,8 @@ class AuthService:
             db.add(user)
         else:
             user.last_login_at = now
+            if clean_email and not user.email:
+                user.email = clean_email
             if name and name.strip():
                 user.name = name.strip()
             if district and district.strip():
@@ -270,7 +275,7 @@ class AuthService:
             'user_id': user.user_id,
             'name': user.name or f'Citizen (+91-{cleaned_phone[-4:]})',
             'phone': formatted_phone,
-            'email': formatted_phone,
+            'email': user.email or formatted_phone,
             'district': user.district or 'Hyderabad',
             'role': user.role or 'citizen',
             'pm_kisan_id': user.pm_kisan_id,
@@ -838,26 +843,49 @@ class AuthService:
         }
 
     @staticmethod
-    def login_with_password(identifier: str, password: str, remember_me: bool, db: Session) -> Dict[str, Any]:
+    def login_with_password(
+        identifier: Optional[str] = None,
+        password: str = "",
+        remember_me: bool = True,
+        db: Session = None,
+        email: Optional[str] = None,
+        mobile_number: Optional[str] = None
+    ) -> Dict[str, Any]:
         now = datetime.now(timezone.utc)
+        clean_email = (email or "").strip().lower() or None
+        clean_phone = normalize_phone(mobile_number) if mobile_number else None
+
         clean_id = (identifier or "").strip()
-        cleaned_phone = normalize_phone(clean_id)
+        if clean_id:
+            if "@" in clean_id and not clean_email:
+                clean_email = clean_id.lower()
+            elif not clean_phone:
+                norm = normalize_phone(clean_id)
+                if len(norm) == 10:
+                    clean_phone = norm
+
+        if not clean_email and not clean_phone:
+            return {
+                "success": False,
+                "error": "Please provide your email address or mobile number."
+            }
 
         user = None
-        if "@" in clean_id:
-            user = db.query(User).filter(User.email == clean_id.lower()).first()
-        elif len(cleaned_phone) == 10:
-            user = db.query(User).filter(User.phone_number == cleaned_phone).first()
+        # 1. Check by email if available
+        if clean_email:
+            user = db.query(User).filter(User.email == clean_email).first()
 
-        if not user:
-            user = db.query(User).filter((User.phone_number == clean_id) | (User.email == clean_id)).first()
+        # 2. If not found, check by mobile number if available
+        if not user and clean_phone:
+            user = db.query(User).filter(User.phone_number == clean_phone).first()
 
         if not user:
             # Auto-provision on first credential login for zero-friction user onboarding
+            default_name = clean_email.split("@")[0].replace(".", " ").title() if clean_email else f"Citizen (+91-{clean_phone[-4:]})"
             user = User(
-                email=clean_id.lower() if "@" in clean_id else None,
-                phone_number=cleaned_phone if len(cleaned_phone) == 10 else None,
-                name=clean_id.split("@")[0].title() if "@" in clean_id else f"Citizen ({clean_id[-4:]})",
+                email=clean_email,
+                phone_number=clean_phone,
+                name=default_name,
                 district="Hyderabad",
                 role="citizen",
                 user_role="citizen",
@@ -878,6 +906,11 @@ class AuthService:
             user.last_login_at = now
             if not user.password_hash:
                 user.password_hash = hash_password(password)
+            # Link missing fields if provided
+            if clean_email and not user.email:
+                user.email = clean_email
+            if clean_phone and not user.phone_number:
+                user.phone_number = clean_phone
             db.commit()
             db.refresh(user)
 
@@ -917,6 +950,8 @@ class AuthService:
         cleaned_phone = normalize_phone(phone) if phone else None
         clean_email = email.strip().lower() if email and email.strip() else None
 
+        clean_pm_kisan = pm_kisan_id.strip() if pm_kisan_id and pm_kisan_id.strip() else None
+
         if not cleaned_phone and not clean_email:
             return {"success": False, "error": "Either mobile number or email is required."}
 
@@ -928,23 +963,32 @@ class AuthService:
             existing = db.query(User).filter(User.email == clean_email).first()
             if existing:
                 return {"success": False, "error": "An account with this email address already exists. Please log in."}
+        if clean_pm_kisan:
+            existing = db.query(User).filter(User.pm_kisan_id == clean_pm_kisan).first()
+            if existing:
+                return {"success": False, "error": "This PM-Kisan ID is already registered to another user."}
 
-        user = User(
-            phone_number=cleaned_phone,
-            email=clean_email,
-            name=name.strip() if name and name.strip() else "Citizen",
-            password_hash=hash_password(password) if password else None,
-            district=district.strip() if district and district.strip() else "Hyderabad",
-            role=role.strip() if role and role.strip() else "citizen",
-            user_role=role.strip() if role and role.strip() else "citizen",
-            pm_kisan_id=pm_kisan_id.strip() if pm_kisan_id and pm_kisan_id.strip() else None,
-            auth_provider="REGISTERED_USER",
-            is_verified=True,
-            last_login_at=now
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            user = User(
+                phone_number=cleaned_phone,
+                email=clean_email,
+                name=name.strip() if name and name.strip() else "Citizen",
+                password_hash=hash_password(password) if password else None,
+                district=district.strip() if district and district.strip() else "Hyderabad",
+                role=role.strip() if role and role.strip() else "citizen",
+                user_role=role.strip() if role and role.strip() else "citizen",
+                pm_kisan_id=clean_pm_kisan,
+                auth_provider="REGISTERED_USER",
+                is_verified=True,
+                last_login_at=now
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"User registration DB error: {e}")
+            return {"success": False, "error": f"Registration failed: {str(e)}"}
 
         token = create_jwt_token(user.user_id, user.phone_number, user.email, user.role, remember_me=remember_me)
 
